@@ -108,6 +108,34 @@ function countBy(items, key) {
   }, {})
 }
 
+function sortSubtasks(items = []) {
+  return [...items].sort(
+    (first, second) =>
+      first.position - second.position ||
+      new Date(first.created_at || 0) - new Date(second.created_at || 0),
+  )
+}
+
+function withSubtaskStats(task, subtasks = task.subtasks ?? []) {
+  const sortedSubtasks = sortSubtasks(subtasks)
+
+  return {
+    ...task,
+    subtasks: sortedSubtasks,
+    subtaskCount: sortedSubtasks.length,
+    completedSubtaskCount: sortedSubtasks.filter((subtask) => subtask.status === 'done').length,
+  }
+}
+
+function attachSubtasks(taskRows = [], subtaskRows = []) {
+  const subtasksByTask = subtaskRows.reduce((groups, subtask) => {
+    groups[subtask.task_id] = [...(groups[subtask.task_id] || []), subtask]
+    return groups
+  }, {})
+
+  return taskRows.map((task) => withSubtaskStats(task, subtasksByTask[task.id] || []))
+}
+
 export function useTasks(user, workspace = {}) {
   const tasks = ref([])
   const selectedFilter = ref('inbox')
@@ -172,10 +200,32 @@ export function useTasks(user, workspace = {}) {
 
     if (error) {
       errorMessage.value = error.message
-    } else {
-      tasks.value = data ?? []
+      isLoading.value = false
+      return
     }
 
+    const taskRows = data ?? []
+    const taskIds = taskRows.map((task) => task.id)
+
+    if (!taskIds.length) {
+      tasks.value = []
+      isLoading.value = false
+      return
+    }
+
+    const { data: subtaskRows, error: subtaskError } = await supabase
+      .from('task_subtasks')
+      .select('*')
+      .eq('user_id', userId.value)
+      .in('task_id', taskIds)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true })
+
+    if (subtaskError) {
+      errorMessage.value = subtaskError.message
+    }
+
+    tasks.value = attachSubtasks(taskRows, subtaskRows ?? [])
     isLoading.value = false
   }
 
@@ -223,7 +273,7 @@ export function useTasks(user, workspace = {}) {
       return false
     }
 
-    tasks.value = [data, ...tasks.value]
+    tasks.value = [withSubtaskStats(data), ...tasks.value]
     return true
   }
 
@@ -259,7 +309,9 @@ export function useTasks(user, workspace = {}) {
       return false
     }
 
-    tasks.value = tasks.value.map((task) => (task.id === taskId ? data : task))
+    tasks.value = tasks.value.map((task) =>
+      task.id === taskId ? withSubtaskStats(data, task.subtasks) : task,
+    )
     return true
   }
 
@@ -280,6 +332,96 @@ export function useTasks(user, workspace = {}) {
     }
 
     tasks.value = tasks.value.filter((task) => task.id !== taskId)
+    return true
+  }
+
+  async function createSubtask(taskId, title) {
+    const parentTask = tasks.value.find((task) => task.id === taskId)
+    if (!userId.value || !parentTask || !title?.trim()) return false
+
+    errorMessage.value = ''
+    const { data, error } = await supabase
+      .from('task_subtasks')
+      .insert({
+        user_id: userId.value,
+        task_id: taskId,
+        title: title.trim(),
+        status: 'todo',
+        position: parentTask.subtasks?.length ?? 0,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      errorMessage.value = error.message
+      return false
+    }
+
+    tasks.value = tasks.value.map((task) =>
+      task.id === taskId ? withSubtaskStats(task, [...(task.subtasks || []), data]) : task,
+    )
+    return true
+  }
+
+  async function updateSubtask(subtaskId, patch) {
+    if (!userId.value) return false
+
+    errorMessage.value = ''
+    const nextPatch = { ...patch }
+
+    if (nextPatch.status === 'done' && !nextPatch.completed_at) {
+      nextPatch.completed_at = new Date().toISOString()
+    }
+
+    if (nextPatch.status && nextPatch.status !== 'done') {
+      nextPatch.completed_at = null
+    }
+
+    const { data, error } = await supabase
+      .from('task_subtasks')
+      .update(nextPatch)
+      .eq('id', subtaskId)
+      .eq('user_id', userId.value)
+      .select()
+      .single()
+
+    if (error) {
+      errorMessage.value = error.message
+      return false
+    }
+
+    tasks.value = tasks.value.map((task) => {
+      if (!task.subtasks?.some((subtask) => subtask.id === subtaskId)) return task
+
+      const subtasks = task.subtasks.map((subtask) => (subtask.id === subtaskId ? data : subtask))
+      return withSubtaskStats(task, subtasks)
+    })
+    return true
+  }
+
+  async function deleteSubtask(subtaskId) {
+    if (!userId.value) return false
+
+    errorMessage.value = ''
+    const { error } = await supabase
+      .from('task_subtasks')
+      .delete()
+      .eq('id', subtaskId)
+      .eq('user_id', userId.value)
+
+    if (error) {
+      errorMessage.value = error.message
+      return false
+    }
+
+    tasks.value = tasks.value.map((task) =>
+      task.subtasks?.some((subtask) => subtask.id === subtaskId)
+        ? withSubtaskStats(
+            task,
+            task.subtasks.filter((subtask) => subtask.id !== subtaskId),
+          )
+        : task,
+    )
     return true
   }
 
@@ -391,5 +533,8 @@ export function useTasks(user, workspace = {}) {
     updateTask,
     archiveTask,
     deleteTask,
+    createSubtask,
+    updateSubtask,
+    deleteSubtask,
   }
 }

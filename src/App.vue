@@ -55,6 +55,9 @@ const {
   updateTask,
   archiveTask,
   deleteTask,
+  createSubtask,
+  updateSubtask,
+  deleteSubtask,
 } = useTasks(user, workspace)
 
 const editingTask = ref(null)
@@ -145,6 +148,9 @@ async function handleSignOut() {
                 :title="activeList?.name || 'Tasks'"
                 :is-loading="isTaskLoading"
                 :error-message="taskErrorMessage"
+                :create-subtask="createSubtask"
+                :update-subtask="updateSubtask"
+                :delete-subtask="deleteSubtask"
                 @update-task="updateTask"
                 @archive-task="archiveTask"
                 @delete-task="deleteTask"

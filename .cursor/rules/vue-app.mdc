@@ -1,0 +1,15 @@
+---
+description: Vue and JavaScript conventions for the tasker dashboard
+globs: **/*.{vue,js}
+alwaysApply: false
+---
+
+# Vue App Conventions
+
+- Use Vue single-file components for UI and JavaScript unless TypeScript is explicitly introduced.
+- Keep components focused on rendering and user interaction; put reusable Supabase/task logic in composables such as `useTasks`.
+- Prefer clear reactive state names like `tasks`, `isLoading`, `errorMessage`, and `selectedFilter`.
+- Show loading, error, empty, and success states for task lists, forms, and dashboard cards.
+- Keep forms accessible with labels, validation text, keyboard-friendly controls, and disabled submit buttons while saving.
+- Avoid hardcoded Supabase queries inside many components; centralize common reads/writes in composables or services.
+- Keep dashboard UI simple: summary cards, task filters, recent or due-soon lists, and obvious create/edit/delete actions.

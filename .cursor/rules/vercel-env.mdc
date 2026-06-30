@@ -1,0 +1,16 @@
+---
+description: Vercel and Vite environment variable safety rules
+globs: **/{.env*,vercel.json,*.js,*.vue}
+alwaysApply: false
+---
+
+# Vercel Environment Safety
+
+- Commit `.env.example` with empty placeholders only.
+- Never commit `.env.local`, real secrets, production keys, or Vercel tokens.
+- Use Vercel Dashboard or `vercel env add` for production, preview, and development secrets.
+- In Vue/Vite browser code, only variables prefixed with `VITE_` are available to the client.
+- Treat every `VITE_` value as public. Do not put private API keys, `service_role` keys, or database passwords behind `VITE_`.
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are acceptable public frontend values when Supabase RLS policies protect user data.
+- If serverless API routes are added later, keep server-only secrets unprefixed and read them only from server-side code.
+- Pull local Vercel env values into `.env.local` when needed, and do not rely on committed env files for secrets.

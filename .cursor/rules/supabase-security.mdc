@@ -1,0 +1,16 @@
+---
+description: Supabase Auth, database, RLS, and key safety rules
+globs: **/*.{js,vue,sql}
+alwaysApply: false
+---
+
+# Supabase Security
+
+- Enable Row Level Security on every user-data table in exposed schemas, especially `public`.
+- For personal task data, include an owner column such as `user_id uuid not null references auth.users(id)` and scope policies with `auth.uid() = user_id`.
+- Write separate policies for `select`, `insert`, `update`, and `delete` when access rules differ.
+- Remember that `update` also needs a matching `select` policy, or updates can return no rows.
+- Browser code may use only the Supabase URL and publishable/anon key.
+- Never place `service_role`, secret keys, database passwords, or private API tokens in Vue/Vite browser code.
+- Do not use user-editable metadata for authorization. Store authorization data in app metadata or tables protected by RLS.
+- If views are exposed, prefer `security_invoker = true` on supported Postgres versions so RLS is honored.

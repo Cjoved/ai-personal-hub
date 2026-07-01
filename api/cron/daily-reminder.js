@@ -2,21 +2,42 @@ import { buildDailyReminderMessage, fetchReminderTasks } from '../../lib/server/
 import { getAdminClient, resolveUserId } from '../../lib/server/supabaseAdmin.js'
 import { sendTelegramMessage } from '../../lib/server/telegram.js'
 
-function isAuthorized(request) {
+function isAuthorized(req) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) return false
 
-  const authHeader = request.headers.get('authorization')
-  return authHeader === `Bearer ${cronSecret}`
+  return req.headers.authorization === `Bearer ${cronSecret}`
 }
 
-export default async function handler(request) {
-  if (request.method !== 'GET' && request.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 })
+function countDueToday(tasks) {
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setHours(23, 59, 59, 999)
+
+  return tasks.filter((task) => {
+    const dueDate = task.due_date ? new Date(task.due_date) : null
+    return dueDate && dueDate >= start && dueDate <= end
+  }).length
+}
+
+function countOverdue(tasks) {
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+
+  return tasks.filter((task) => {
+    const dueDate = task.due_date ? new Date(task.due_date) : null
+    return dueDate && dueDate < start
+  }).length
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).send('Method not allowed')
   }
 
-  if (!isAuthorized(request)) {
-    return new Response('Unauthorized', { status: 401 })
+  if (!isAuthorized(req)) {
+    return res.status(401).send('Unauthorized')
   }
 
   try {
@@ -27,26 +48,14 @@ export default async function handler(request) {
 
     await sendTelegramMessage(message)
 
-    return Response.json({
+    return res.status(200).json({
       ok: true,
       sent: true,
-      dueToday: tasks.filter((task) => {
-        const dueDate = task.due_date ? new Date(task.due_date) : null
-        const start = new Date()
-        start.setHours(0, 0, 0, 0)
-        const end = new Date(start)
-        end.setHours(23, 59, 59, 999)
-        return dueDate && dueDate >= start && dueDate <= end
-      }).length,
-      overdue: tasks.filter((task) => {
-        const dueDate = task.due_date ? new Date(task.due_date) : null
-        const start = new Date()
-        start.setHours(0, 0, 0, 0)
-        return dueDate && dueDate < start
-      }).length,
+      dueToday: countDueToday(tasks),
+      overdue: countOverdue(tasks),
     })
   } catch (error) {
     console.error('daily-reminder failed', error)
-    return Response.json({ ok: false, error: error.message }, { status: 500 })
+    return res.status(500).json({ ok: false, error: error.message })
   }
 }

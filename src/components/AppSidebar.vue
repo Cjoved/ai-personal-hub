@@ -41,7 +41,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select-dashboard', 'select-spaces', 'select-space', 'select-list'])
+const emit = defineEmits(['select-dashboard', 'select-spaces', 'select-space', 'select-list', 'close'])
 
 const expandedSpaceIds = ref(new Set())
 const addingSpaceId = ref(null)
@@ -119,9 +119,19 @@ watch(
 </script>
 
 <template>
-  <aside class="sidebar-shell flex h-full min-h-screen w-full flex-col px-3 py-4 text-slate-200 lg:w-72">
-    <div class="relative mb-6 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-[inset_0_1px_0_rgb(255,255,255,0.06)]">
+  <aside class="sidebar-shell flex h-full flex-col px-3 py-4 text-slate-200 lg:min-h-screen lg:w-72">
+    <div class="relative mb-6 flex items-start justify-between gap-2 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-[inset_0_1px_0_rgb(255,255,255,0.06)]">
       <AppLogo variant="sidebar" />
+      <button
+        class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white lg:hidden"
+        type="button"
+        aria-label="Close navigation"
+        @click="emit('close')"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
     </div>
 
     <nav class="relative min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">

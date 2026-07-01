@@ -102,7 +102,7 @@ defineExpose({ focusSearch })
 </script>
 
 <template>
-  <header class="shell-header relative overflow-hidden rounded-2xl p-5 sm:p-6">
+  <header class="shell-header relative overflow-hidden rounded-2xl p-4 sm:p-6">
     <div class="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-sky-500 to-violet-500"></div>
     <div class="pointer-events-none absolute right-0 top-0 h-32 w-32 translate-x-1/4 -translate-y-1/4 rounded-full bg-emerald-400/10 blur-3xl"></div>
 
@@ -194,11 +194,18 @@ defineExpose({ focusSearch })
           </span>
 
           <button
-            class="type-button shrink-0 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-slate-900 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-500/10 dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-rose-500/40 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+            class="type-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200/90 bg-white text-slate-900 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-500/10 dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-rose-500/40 dark:hover:bg-rose-950/40 dark:hover:text-rose-300 sm:w-auto sm:px-4 sm:py-2.5"
             type="button"
+            title="Sign out"
+            aria-label="Sign out"
             @click="emit('sign-out')"
           >
-            Sign out
+            <svg class="h-4 w-4 sm:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <path d="M16 17l5-5-5-5" />
+              <path d="M21 12H9" />
+            </svg>
+            <span class="hidden sm:inline">Sign out</span>
           </button>
         </div>
       </div>
@@ -214,7 +221,7 @@ defineExpose({ focusSearch })
 
     <div
       v-if="activeList"
-      class="relative mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200/80 pt-4"
+      class="workspace-view-toolbar relative mt-4 border-t border-slate-200/80 pt-4"
     >
       <ViewTabs :model-value="activeView" @update:model-value="emit('update:activeView', $event)" />
 
@@ -233,7 +240,7 @@ defineExpose({ focusSearch })
       </select>
 
       <button
-        class="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20"
+        class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20"
         type="button"
         title="Add task (N)"
         aria-label="Add task"

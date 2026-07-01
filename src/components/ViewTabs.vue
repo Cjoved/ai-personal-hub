@@ -20,7 +20,7 @@ const emit = defineEmits(['update:modelValue'])
     <button
       v-for="view in views"
       :key="view.value"
-      class="type-tab rounded-lg px-4 py-2 transition focus:outline-none focus:ring-4 focus:ring-emerald-500/10"
+      class="type-tab rounded-lg px-3 py-2 transition focus:outline-none focus:ring-4 focus:ring-emerald-500/10 sm:px-4"
       :class="
         modelValue === view.value
           ? 'view-tab-active bg-white text-emerald-800 shadow-sm dark:bg-indigo-500/20 dark:text-indigo-200'

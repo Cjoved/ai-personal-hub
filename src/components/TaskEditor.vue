@@ -178,7 +178,7 @@ async function onSubtaskDrop(targetId) {
 </script>
 
 <template>
-  <div class="task-editor-backdrop fixed inset-0 z-50 grid place-items-center px-3 py-4 sm:px-4 sm:py-6">
+  <div class="task-editor-backdrop fixed inset-0 z-50 grid place-items-center px-0 py-0 sm:px-4 sm:py-6">
     <form class="task-editor-modal" @submit.prevent="handleSubmit">
       <div class="task-editor-accent"></div>
 

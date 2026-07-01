@@ -33,8 +33,8 @@ function update(patch) {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[250] grid place-items-center bg-slate-950/40 px-4 py-6 backdrop-blur-sm">
-    <section class="shell-header w-full max-w-lg rounded-2xl p-6 shadow-2xl">
+  <div class="settings-backdrop fixed inset-0 z-[250] grid place-items-center bg-slate-950/40 px-0 py-0 backdrop-blur-sm sm:px-4 sm:py-6">
+    <section class="shell-header settings-panel w-full max-w-lg rounded-none p-5 shadow-2xl sm:rounded-2xl sm:p-6">
       <div class="flex items-start justify-between gap-4">
         <div>
           <p class="type-kicker text-emerald-600">Preferences</p>

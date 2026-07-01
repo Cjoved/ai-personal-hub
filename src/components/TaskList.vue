@@ -222,8 +222,8 @@ function toggleSubtaskDone(subtask, isChecked) {
           </div>
         </header>
 
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-[900px] border-collapse text-left">
+        <div class="task-table-wrap md:overflow-x-auto">
+          <table class="task-table w-full border-collapse text-left md:min-w-[900px]">
             <thead>
               <tr class="type-table-head" :class="neon(group.value).thead">
                 <th class="w-10 px-4 py-3"></th>
@@ -239,7 +239,7 @@ function toggleSubtaskDone(subtask, isChecked) {
             <tbody>
               <template v-for="(task, rowIndex) in group.tasks" :key="task.id">
                 <tr
-                  class="transition"
+                  class="task-row transition"
                   :class="rowIndex % 2 === 1 ? neon(group.value).rowAlt : neon(group.value).row"
                 >
                   <td class="px-4 py-3.5 align-middle">
@@ -288,7 +288,7 @@ function toggleSubtaskDone(subtask, isChecked) {
                     </button>
                   </td>
 
-                  <td class="px-4 py-3.5 align-middle">
+                  <td class="px-4 py-3.5 align-middle" data-label="Status">
                     <AppSelect
                       :model-value="task.status"
                       :options="statusOptions"
@@ -298,13 +298,13 @@ function toggleSubtaskDone(subtask, isChecked) {
                     />
                   </td>
 
-                  <td class="max-w-[220px] px-4 py-3.5 align-middle">
+                  <td class="max-w-[220px] px-4 py-3.5 align-middle" data-label="Location">
                     <span class="inline-flex max-w-full truncate rounded-lg px-2.5 py-1 text-[11px] font-semibold" :class="neon(group.value).location">
                       {{ formatLocation(task) }}
                     </span>
                   </td>
 
-                  <td class="px-4 py-3.5 align-middle">
+                  <td class="px-4 py-3.5 align-middle" data-label="Priority">
                     <AppSelect
                       :model-value="task.priority"
                       :options="priorityOptions"
@@ -314,7 +314,7 @@ function toggleSubtaskDone(subtask, isChecked) {
                     />
                   </td>
 
-                  <td class="px-4 py-3.5 align-middle">
+                  <td class="px-4 py-3.5 align-middle" data-label="Due date">
                     <span class="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
                       <svg class="h-3 w-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -382,7 +382,7 @@ function toggleSubtaskDone(subtask, isChecked) {
                   </td>
                 </tr>
 
-                <tr v-if="isExpanded(task.id)" :class="neon(group.value).rowAlt">
+                <tr v-if="isExpanded(task.id)" class="task-subtasks-row" :class="neon(group.value).rowAlt">
                   <td></td>
                   <td colspan="6" class="px-4 py-3">
                     <div class="space-y-2 rounded-xl p-3" :class="neon(group.value).subtaskPanel">

@@ -37,6 +37,7 @@ const {
   errorMessage: workspaceErrorMessage,
   createSpace,
   createList,
+  deleteSpace,
   selectDashboard,
   selectSpaces,
   selectSpace,
@@ -58,6 +59,7 @@ const {
   createSubtask,
   updateSubtask,
   deleteSubtask,
+  fetchTasks,
 } = useTasks(user, workspace)
 
 const editingTask = ref(null)
@@ -76,6 +78,15 @@ async function handleSignOut() {
   editingTask.value = null
   await signOut()
   selectDashboard()
+}
+
+async function handleDeleteSpace(spaceId) {
+  const didDelete = await deleteSpace(spaceId)
+  if (didDelete) {
+    editingTask.value = null
+    await fetchTasks()
+  }
+  return didDelete
 }
 </script>
 
@@ -133,6 +144,7 @@ async function handleSignOut() {
               :lists="lists"
               :create-space="createSpace"
               :create-list="createList"
+              :delete-space="handleDeleteSpace"
               @select-space="selectSpace"
               @select-list="selectList"
             />

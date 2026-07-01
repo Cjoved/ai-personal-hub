@@ -18,6 +18,10 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  deleteSpace: {
+    type: Function,
+    required: true,
+  },
 })
 
 const emit = defineEmits(['select-space', 'select-list'])
@@ -27,6 +31,7 @@ const addingListSpaceId = ref(null)
 const listName = ref('')
 const isCreatingSpace = ref(false)
 const isCreatingList = ref(false)
+const deletingSpaceId = ref(null)
 
 const spaceCards = computed(() =>
   props.spaces.map((space) => ({
@@ -59,6 +64,17 @@ async function submitList(spaceId) {
     addingListSpaceId.value = null
   }
   isCreatingList.value = false
+}
+
+async function handleDeleteSpace(space) {
+  const shouldDelete = globalThis.confirm(
+    `Delete "${space.name}"? This will permanently remove all lists, tasks, and subtasks in this space.`,
+  )
+  if (!shouldDelete || deletingSpaceId.value) return
+
+  deletingSpaceId.value = space.id
+  await props.deleteSpace(space.id)
+  deletingSpaceId.value = null
 }
 </script>
 
@@ -105,9 +121,19 @@ async function submitList(spaceId) {
               </span>
             </button>
 
-            <button class="text-xs font-bold text-emerald-700 transition hover:text-emerald-600" type="button" @click="emit('select-space', space.id)">
-              Summary
-            </button>
+            <div class="flex shrink-0 flex-col items-end gap-2">
+              <button class="text-xs font-bold text-emerald-700 transition hover:text-emerald-600" type="button" @click="emit('select-space', space.id)">
+                Summary
+              </button>
+              <button
+                class="text-xs font-bold text-rose-600 transition hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                :disabled="deletingSpaceId === space.id"
+                @click="handleDeleteSpace(space)"
+              >
+                Delete Space
+              </button>
+            </div>
           </div>
 
           <div class="min-h-44 space-y-2">

@@ -241,9 +241,19 @@ export function useWorkspace(user) {
       return false
     }
 
+    const hadActiveListInSpace = lists.value.some(
+      (list) => list.space_id === spaceId && list.id === activeListId.value,
+    )
+
     spaces.value = spaces.value.filter((space) => space.id !== spaceId)
     lists.value = lists.value.filter((list) => list.space_id !== spaceId)
-    if (activeSpaceId.value === spaceId) selectDashboard()
+
+    if (activeSpaceId.value === spaceId || hadActiveListInSpace) {
+      activeSpaceId.value = null
+      activeListId.value = null
+      activePage.value = 'spaces'
+    }
+
     return true
   }
 

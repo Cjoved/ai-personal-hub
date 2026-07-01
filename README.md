@@ -383,3 +383,44 @@ tasker/
 ## License
 
 Private / personal use.
+
+---
+
+## PWA & Android APK (PWA Builder)
+
+The website stays the same in the browser. PWA files only add installability and offline caching for static assets. Supabase auth and task data still load over the network.
+
+### What was added
+
+- `manifest.webmanifest` (auto-generated on build)
+- Service worker (`sw.js`) for caching static files
+- PNG icons: `public/pwa-192.png`, `public/pwa-512.png`
+- Regenerate icons anytime: `npm run icons`
+
+### Build and deploy first
+
+PWA Builder needs your **live HTTPS URL**, not localhost:
+
+```bash
+npm run build
+```
+
+Push to GitHub / deploy on Vercel as usual. The PWA files ship inside `dist/` automatically.
+
+### Verify before packaging
+
+1. Open your Vercel URL in Chrome (desktop or mobile).
+2. Open DevTools → **Application** → **Manifest** — confirm name and icons load.
+3. Check **Service workers** — should show a registered worker.
+4. On Android Chrome: menu → **Install app** or **Add to Home screen**.
+
+### Package APK with PWA Builder
+
+1. Go to [pwabuilder.com](https://www.pwabuilder.com/) and enter your Vercel URL.
+2. Fix any warnings (manifest and service worker should already score well).
+3. Click **Package for stores** → **Android**.
+4. Set package ID (e.g. `com.yourname.tasker`), version, and colors.
+5. Create or upload a signing key, then download the **APK**.
+
+No extra Supabase or Vercel env vars are needed for the APK — it wraps the same deployed site.
+

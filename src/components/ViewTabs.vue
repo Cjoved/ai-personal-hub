@@ -2,6 +2,7 @@
 const views = [
   { value: 'list', label: 'List' },
   { value: 'board', label: 'Board' },
+  { value: 'calendar', label: 'Calendar' },
 ]
 
 defineProps({
@@ -15,15 +16,15 @@ const emit = defineEmits(['update:modelValue'])
 </script>
 
 <template>
-  <div class="flex flex-wrap gap-2">
+  <div class="view-tabs-neon inline-flex rounded-xl border border-slate-200/90 bg-slate-100/80 p-1 dark:border-indigo-400/25">
     <button
       v-for="view in views"
       :key="view.value"
-      class="rounded-xl border px-4 py-2 text-sm font-extrabold transition focus:outline-none focus:ring-4 focus:ring-emerald-500/10"
+      class="type-tab rounded-lg px-4 py-2 transition focus:outline-none focus:ring-4 focus:ring-emerald-500/10"
       :class="
         modelValue === view.value
-          ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
-          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+          ? 'view-tab-active bg-white text-emerald-800 shadow-sm dark:bg-indigo-500/20 dark:text-indigo-200'
+          : 'view-tab-idle text-slate-600 hover:text-slate-900 dark:text-indigo-300/70 dark:hover:text-indigo-200'
       "
       type="button"
       @click="emit('update:modelValue', view.value)"

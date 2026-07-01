@@ -1,5 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
+import AppSelect from './AppSelect.vue'
+import { getStatusNeon } from '../composables/statusNeon'
 import { priorityOptions, statusOptions } from '../composables/useTasks'
 
 const props = defineProps({
@@ -33,33 +35,83 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update-task', 'archive-task', 'delete-task', 'edit-task'])
+const emit = defineEmits(['update-task', 'archive-task', 'restore-task', 'delete-task', 'edit-task'])
 
 const expandedTaskIds = ref(new Set())
 const subtaskDrafts = ref({})
 const savingSubtaskIds = ref(new Set())
 
 const groupTone = {
-  inbox: 'border-l-indigo-500',
-  todo: 'border-l-slate-500',
-  in_progress: 'border-l-sky-500',
-  done: 'border-l-emerald-500',
-  archived: 'border-l-slate-300',
+  inbox: 'border-l-indigo-400',
+  todo: 'border-l-violet-400',
+  in_progress: 'border-l-cyan-400',
+  done: 'border-l-emerald-400',
+  archived: 'border-l-fuchsia-400/70',
 }
 
 const statusPill = {
-  inbox: 'bg-indigo-50 text-indigo-700',
-  todo: 'bg-slate-100 text-slate-700',
-  in_progress: 'bg-sky-50 text-sky-700',
-  done: 'bg-emerald-50 text-emerald-700',
-  archived: 'bg-slate-100 text-slate-500',
+  inbox: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200',
+  todo: 'bg-violet-50 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200',
+  in_progress: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-200',
+  done: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200',
+  archived: 'bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-500/15 dark:text-fuchsia-200',
+}
+
+const statusDot = {
+  inbox: 'bg-indigo-400 shadow-[0_0_10px_rgb(129_140_248/0.75)]',
+  todo: 'bg-violet-400 shadow-[0_0_10px_rgb(167_139_250/0.75)]',
+  in_progress: 'bg-cyan-400 shadow-[0_0_10px_rgb(34_211_238/0.75)]',
+  done: 'bg-emerald-400 shadow-[0_0_10px_rgb(52_211_153/0.75)]',
+  archived: 'bg-fuchsia-400/70 shadow-[0_0_8px_rgb(232_121_249/0.5)]',
 }
 
 const priorityPill = {
-  urgent: 'bg-rose-50 text-rose-700',
-  high: 'bg-orange-50 text-orange-700',
-  normal: 'bg-amber-50 text-amber-700',
-  low: 'bg-sky-50 text-sky-700',
+  urgent: 'border-rose-200/80 bg-rose-50 text-rose-700',
+  high: 'border-orange-200/80 bg-orange-50 text-orange-700',
+  normal: 'border-amber-200/80 bg-amber-50 text-amber-800',
+  low: 'border-sky-200/80 bg-sky-50 text-sky-700',
+}
+
+const statusSelectPill = {
+  inbox: 'border-indigo-200/80 bg-indigo-50 text-indigo-700 dark:border-indigo-400/40 dark:bg-indigo-500/15 dark:text-indigo-200',
+  todo: 'border-violet-200/80 bg-violet-50 text-violet-700 dark:border-violet-400/40 dark:bg-violet-500/15 dark:text-violet-200',
+  in_progress: 'border-cyan-200/80 bg-cyan-50 text-cyan-700 dark:border-cyan-400/40 dark:bg-cyan-500/15 dark:text-cyan-200',
+  done: 'border-emerald-200/80 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-200',
+  archived: 'border-fuchsia-200/80 bg-fuchsia-50 text-fuchsia-600 dark:border-fuchsia-400/35 dark:bg-fuchsia-500/12 dark:text-fuchsia-200',
+}
+
+const actionBtn = {
+  edit: 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-400/40 dark:bg-sky-500/15 dark:text-sky-200 dark:hover:bg-sky-500/25',
+  archive: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-400/40 dark:bg-amber-500/15 dark:text-amber-200 dark:hover:bg-amber-500/25',
+  delete: 'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-400/40 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:bg-rose-500/25',
+}
+
+const subtaskStatusTone = {
+  todo: 'border-violet-200/80 bg-violet-50 text-violet-700 dark:border-violet-400/40 dark:bg-violet-500/15 dark:text-violet-200',
+  in_progress: 'border-cyan-200/80 bg-cyan-50 text-cyan-700 dark:border-cyan-400/40 dark:bg-cyan-500/15 dark:text-cyan-200',
+  done: 'border-emerald-200/80 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-200',
+}
+
+const subtaskStatusOptions = [
+  { value: 'todo', label: 'To do' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'done', label: 'Done' },
+]
+
+function neon(status) {
+  return getStatusNeon(status)
+}
+
+function statusTone(value) {
+  return statusSelectPill[value] || statusSelectPill.inbox
+}
+
+function priorityTone(value) {
+  return priorityPill[value] || priorityPill.normal
+}
+
+function subtaskTone(value) {
+  return subtaskStatusTone[value] || subtaskStatusTone.todo
 }
 
 const taskGroups = computed(() =>
@@ -127,18 +179,20 @@ function toggleSubtaskDone(subtask, isChecked) {
 
 <template>
   <section class="space-y-4">
-    <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div class="flex items-center gap-3">
-            <span class="h-3 w-3 rounded-full bg-indigo-500"></span>
-            <h2 class="text-xl font-black text-slate-950">{{ title }}</h2>
-            <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">Active</span>
+    <header class="shell-header relative overflow-hidden rounded-2xl p-4 sm:p-5">
+      <div class="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500"></div>
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600 ring-1 ring-indigo-500/15">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7h16M4 12h10M4 17h7" />
+          </svg>
+        </span>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-lg font-black text-slate-950 sm:text-xl">{{ title }}</h2>
+            <span class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200">{{ tasks.length }} tasks</span>
+            <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200">{{ tasks.filter((task) => task.status !== 'done').length }} open</span>
           </div>
-          <p class="mt-1 text-sm text-slate-500">
-            {{ tasks.length }} tasks · {{ tasks.filter((task) => task.status !== 'done').length }} open ·
-            {{ tasks.filter((task) => task.due_date).length }} with due date
-          </p>
         </div>
       </div>
     </header>
@@ -155,26 +209,23 @@ function toggleSubtaskDone(subtask, isChecked) {
       <section
         v-for="group in taskGroups"
         :key="group.value"
-        class="overflow-hidden rounded-2xl border border-slate-200 border-l-4 bg-white shadow-sm"
-        :class="groupTone[group.value]"
+        class="status-neon-zone dashboard-card overflow-hidden rounded-2xl border-l-4"
+        :class="[groupTone[group.value], neon(group.value).border]"
       >
-        <header class="flex items-center justify-between gap-4 border-b border-slate-100 bg-white px-4 py-3">
+        <header class="flex items-center justify-between gap-4 px-4 py-3" :class="neon(group.value).header">
           <div class="flex items-center gap-3">
-            <button class="text-slate-400" type="button" aria-label="Group expanded">⌄</button>
-            <span class="h-2.5 w-2.5 rounded-full" :class="statusPill[group.value]"></span>
-            <h3 class="text-sm font-black uppercase tracking-wide text-slate-800">{{ group.label }}</h3>
-            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">
+            <span class="h-2.5 w-2.5 rounded-full ring-2 ring-white/80 dark:ring-slate-900/50" :class="statusDot[group.value]"></span>
+            <h3 class="type-column-title uppercase tracking-wide" :class="neon(group.value).title">{{ group.label }}</h3>
+            <span class="rounded-full px-2 py-0.5 text-xs font-bold" :class="neon(group.value).badge">
               {{ group.tasks.length }}
             </span>
           </div>
-
-          <span class="text-lg text-slate-300">+</span>
         </header>
 
         <div class="overflow-x-auto">
           <table class="w-full min-w-[900px] border-collapse text-left">
             <thead>
-              <tr class="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+              <tr class="type-table-head" :class="neon(group.value).thead">
                 <th class="w-10 px-4 py-3"></th>
                 <th class="px-4 py-3">Task</th>
                 <th class="px-4 py-3">Status</th>
@@ -186,22 +237,33 @@ function toggleSubtaskDone(subtask, isChecked) {
             </thead>
 
             <tbody>
-              <template v-for="task in group.tasks" :key="task.id">
-                <tr class="border-b border-slate-100 hover:bg-slate-50/80">
-                  <td class="px-4 py-3 align-top">
+              <template v-for="(task, rowIndex) in group.tasks" :key="task.id">
+                <tr
+                  class="transition"
+                  :class="rowIndex % 2 === 1 ? neon(group.value).rowAlt : neon(group.value).row"
+                >
+                  <td class="px-4 py-3.5 align-middle">
                     <div class="flex items-center gap-2">
                       <button
-                        class="grid h-6 w-6 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                        class="grid h-7 w-7 place-items-center rounded-lg transition"
+                        :class="neon(group.value).iconBtn"
                         type="button"
                         :aria-label="isExpanded(task.id) ? 'Collapse subtasks' : 'Expand subtasks'"
                         @click="toggleTask(task.id)"
                       >
-                        <span class="block text-xs leading-none transition-transform" :class="isExpanded(task.id) ? 'rotate-90' : ''">
-                          ›
-                        </span>
+                        <svg
+                          class="h-3.5 w-3.5 transition-transform"
+                          :class="isExpanded(task.id) ? 'rotate-90' : ''"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
                       </button>
                       <input
-                        class="h-4 w-4 rounded border-slate-300 text-emerald-600"
+                        class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/20"
                         type="checkbox"
                         :checked="task.status === 'done'"
                         @change="toggleDone(task, $event.target.checked)"
@@ -209,95 +271,125 @@ function toggleSubtaskDone(subtask, isChecked) {
                     </div>
                   </td>
 
-                  <td class="max-w-[360px] px-4 py-3 align-top">
+                  <td class="max-w-[360px] px-4 py-3.5 align-middle">
                     <button class="block w-full text-left" type="button" @click="emit('edit-task', task)">
                       <span class="flex min-w-0 items-center gap-2">
-                        <span class="truncate text-sm font-bold text-slate-950">{{ task.title }}</span>
+                        <span class="type-task-title truncate text-slate-950 dark:text-slate-100">{{ task.title }}</span>
                         <span
                           v-if="task.subtaskCount"
-                          class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500"
+                          class="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-600 ring-1 ring-indigo-100"
                         >
                           {{ task.completedSubtaskCount }}/{{ task.subtaskCount }}
                         </span>
                       </span>
-                      <span v-if="task.description" class="mt-1 line-clamp-1 text-xs text-slate-500">
+                      <span v-if="task.description" class="type-caption type-muted mt-1 line-clamp-1">
                         {{ task.description }}
                       </span>
                     </button>
                   </td>
 
-                  <td class="px-4 py-3 align-top">
-                    <select
-                      class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                      :value="task.status"
+                  <td class="px-4 py-3.5 align-middle">
+                    <AppSelect
+                      :model-value="task.status"
+                      :options="statusOptions"
+                      :option-tone="statusTone"
                       aria-label="Update status"
-                      @change="emit('update-task', task.id, { status: $event.target.value })"
-                    >
-                      <option v-for="option in statusOptions" :key="option.value" :value="option.value">
-                        {{ option.label }}
-                      </option>
-                    </select>
+                      @update:model-value="emit('update-task', task.id, { status: $event })"
+                    />
                   </td>
 
-                  <td class="max-w-[220px] px-4 py-3 align-top">
-                    <span class="block truncate text-xs font-semibold text-slate-500">{{ formatLocation(task) }}</span>
+                  <td class="max-w-[220px] px-4 py-3.5 align-middle">
+                    <span class="inline-flex max-w-full truncate rounded-lg px-2.5 py-1 text-[11px] font-semibold" :class="neon(group.value).location">
+                      {{ formatLocation(task) }}
+                    </span>
                   </td>
 
-                  <td class="px-4 py-3 align-top">
-                    <select
-                      class="rounded-full border border-transparent px-3 py-1.5 text-xs font-bold capitalize outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                      :class="priorityPill[task.priority] || priorityPill.normal"
-                      :value="task.priority"
+                  <td class="px-4 py-3.5 align-middle">
+                    <AppSelect
+                      :model-value="task.priority"
+                      :options="priorityOptions"
+                      :option-tone="priorityTone"
                       aria-label="Update priority"
-                      @change="emit('update-task', task.id, { priority: $event.target.value })"
-                    >
-                      <option v-for="option in priorityOptions" :key="option.value" :value="option.value">
-                        {{ option.label }}
-                      </option>
-                    </select>
+                      @update:model-value="emit('update-task', task.id, { priority: $event })"
+                    />
                   </td>
 
-                  <td class="px-4 py-3 align-top">
-                    <span class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                  <td class="px-4 py-3.5 align-middle">
+                    <span class="inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
+                      <svg class="h-3 w-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" />
+                        <path d="M16 2v4M8 2v4M3 10h18" />
+                      </svg>
                       {{ formatDate(task.due_date) }}
                     </span>
                   </td>
 
-                  <td class="px-4 py-3 align-top">
-                    <div class="flex justify-end gap-2">
+                  <td class="px-4 py-3.5 align-middle">
+                    <div class="flex justify-end gap-1.5">
                       <button
-                        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                        class="grid h-8 w-8 place-items-center rounded-lg border transition"
+                        :class="actionBtn.edit"
                         type="button"
+                        title="Edit"
+                        aria-label="Edit task"
                         @click="emit('edit-task', task)"
                       >
-                        Edit
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
                       </button>
                       <button
-                        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:bg-slate-50"
+                        v-if="task.status === 'archived'"
+                        class="grid h-8 w-8 place-items-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
                         type="button"
+                        title="Restore"
+                        aria-label="Restore task"
+                        @click="emit('restore-task', task.id)"
+                      >
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M3 12a9 9 0 1 0 9-9" />
+                          <path d="M3 3v6h6" />
+                        </svg>
+                      </button>
+                      <button
+                        v-else
+                        class="grid h-8 w-8 place-items-center rounded-lg border transition"
+                        :class="actionBtn.archive"
+                        type="button"
+                        title="Archive"
+                        aria-label="Archive task"
                         @click="emit('archive-task', task.id)"
                       >
-                        Archive
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="4" width="18" height="4" rx="1" />
+                          <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+                          <path d="M10 12h4" />
+                        </svg>
                       </button>
                       <button
-                        class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                        class="grid h-8 w-8 place-items-center rounded-lg border transition"
+                        :class="actionBtn.delete"
                         type="button"
+                        title="Delete"
+                        aria-label="Delete task"
                         @click="emit('delete-task', task.id)"
                       >
-                        Delete
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+                        </svg>
                       </button>
                     </div>
                   </td>
                 </tr>
 
-                <tr v-if="isExpanded(task.id)" class="border-b border-slate-100 bg-slate-50/50">
+                <tr v-if="isExpanded(task.id)" :class="neon(group.value).rowAlt">
                   <td></td>
                   <td colspan="6" class="px-4 py-3">
-                    <div class="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                    <div class="space-y-2 rounded-xl p-3" :class="neon(group.value).subtaskPanel">
                       <div
                         v-for="subtask in task.subtasks"
                         :key="subtask.id"
-                        class="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50"
+                        class="neon-subtask-row grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 transition"
                       >
                         <label class="flex min-w-0 items-center gap-3 text-sm font-medium text-slate-700">
                           <input
@@ -311,23 +403,24 @@ function toggleSubtaskDone(subtask, isChecked) {
                           </span>
                         </label>
 
-                        <select
-                          class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
-                          :value="subtask.status"
+                        <AppSelect
+                          :model-value="subtask.status"
+                          :options="subtaskStatusOptions"
+                          :option-tone="subtaskTone"
                           aria-label="Update subtask status"
-                          @change="props.updateSubtask(subtask.id, { status: $event.target.value })"
-                        >
-                          <option value="todo">To do</option>
-                          <option value="in_progress">In progress</option>
-                          <option value="done">Done</option>
-                        </select>
+                          @update:model-value="props.updateSubtask(subtask.id, { status: $event })"
+                        />
 
                         <button
-                          class="rounded-lg px-2 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+                          class="grid h-7 w-7 place-items-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
                           type="button"
+                          title="Delete subtask"
+                          aria-label="Delete subtask"
                           @click="props.deleteSubtask(subtask.id)"
                         >
-                          Delete
+                          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+                          </svg>
                         </button>
                       </div>
 
@@ -335,14 +428,15 @@ function toggleSubtaskDone(subtask, isChecked) {
                         No subtasks yet.
                       </p>
 
-                      <form class="flex gap-2 border-t border-slate-100 pt-3" @submit.prevent="submitSubtask(task)">
+                      <form class="flex gap-2 border-t pt-3" :style="{ borderColor: 'var(--neon-border)' }" @submit.prevent="submitSubtask(task)">
                         <input
                           v-model.trim="subtaskDrafts[task.id]"
-                          class="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                          class="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-600 dark:bg-slate-900/80 dark:text-slate-100"
+                          :style="{ borderColor: 'var(--neon-border)' }"
                           placeholder="+ Add subtask..."
                         />
                         <button
-                          class="rounded-xl bg-slate-950 px-3 py-2 text-sm font-extrabold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                          class="rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-3 py-2 text-sm font-extrabold text-white shadow-[0_0_14px_rgb(99_102_241/0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                           type="submit"
                           :disabled="savingSubtaskIds.has(task.id) || !subtaskDrafts[task.id]?.trim()"
                         >
@@ -359,9 +453,9 @@ function toggleSubtaskDone(subtask, isChecked) {
       </section>
     </template>
 
-    <div v-else class="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
+    <div v-else class="dashboard-card rounded-2xl border border-dashed border-slate-300 p-10 text-center">
       <p class="text-base font-semibold text-slate-700">No tasks here yet.</p>
-      <p class="mt-2 text-sm text-slate-500">Try quick adding a task or switching filters.</p>
+      <p class="mt-2 text-sm text-slate-500">Use the <strong>+</strong> button above to add a task, or try a different filter.</p>
     </div>
   </section>
 </template>

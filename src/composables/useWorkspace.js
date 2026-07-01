@@ -28,6 +28,29 @@ function sortByPosition(items) {
   return [...items].sort((first, second) => first.position - second.position || first.name.localeCompare(second.name))
 }
 
+function navigationStorageKey(userId) {
+  return userId ? `tasker:workspace-nav:${userId}` : null
+}
+
+function readSavedNavigation(userId) {
+  const key = navigationStorageKey(userId)
+  if (!key) return null
+
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function writeSavedNavigation(userId, snapshot) {
+  const key = navigationStorageKey(userId)
+  if (!key) return
+
+  localStorage.setItem(key, JSON.stringify(snapshot))
+}
+
 export function useWorkspace(user) {
   const spaces = ref([])
   const lists = ref([])
@@ -37,6 +60,7 @@ export function useWorkspace(user) {
   const activeView = ref('list')
   const isLoading = ref(false)
   const errorMessage = ref('')
+  let canPersistNavigation = false
 
   const userId = computed(() => user.value?.id)
   const activeSpace = computed(() => spaces.value.find((space) => space.id === activeSpaceId.value) ?? null)
@@ -49,7 +73,8 @@ export function useWorkspace(user) {
   const locationLabel = computed(() => {
     if (activeList.value && activeSpace.value) return `${activeSpace.value.name} / ${activeList.value.name}`
     if (activeSpace.value) return activeSpace.value.name
-    if (isSpacesOverview.value) return 'Spaces'
+    if (isSpacesOverview.value) return 'Manage and organize your spaces'
+    if (isDashboard.value) return 'Overview of all spaces and tasks'
     return 'Dashboard'
   })
 
@@ -94,6 +119,52 @@ export function useWorkspace(user) {
     if (activeListId.value && !lists.value.some((list) => list.id === activeListId.value)) {
       activeListId.value = null
     }
+
+    if (activeListId.value) {
+      const list = lists.value.find((item) => item.id === activeListId.value)
+      activeSpaceId.value = list?.space_id ?? null
+      activePage.value = 'workspace'
+      return
+    }
+
+    if (activeSpaceId.value) {
+      activePage.value = 'workspace'
+      return
+    }
+
+    if (activePage.value === 'spaces') {
+      return
+    }
+
+    if (activePage.value !== 'dashboard') {
+      activePage.value = 'dashboard'
+    }
+  }
+
+  function persistNavigation() {
+    if (!canPersistNavigation || !userId.value) return
+
+    writeSavedNavigation(userId.value, {
+      activePage: activePage.value,
+      activeSpaceId: activeSpaceId.value,
+      activeListId: activeListId.value,
+      activeView: activeView.value,
+    })
+  }
+
+  function restoreNavigation() {
+    const saved = readSavedNavigation(userId.value)
+
+    if (saved) {
+      activePage.value = saved.activePage || 'dashboard'
+      activeSpaceId.value = saved.activeSpaceId || null
+      activeListId.value = saved.activeListId || null
+      activeView.value = ['board', 'calendar'].includes(saved.activeView) ? saved.activeView : 'list'
+    }
+
+    ensureActiveLocation()
+    canPersistNavigation = true
+    persistNavigation()
   }
 
   async function seedDefaultWorkspace() {
@@ -171,7 +242,7 @@ export function useWorkspace(user) {
 
       spaces.value = sortByPosition(spaceRows ?? [])
       lists.value = sortByPosition(listRows ?? [])
-      ensureActiveLocation()
+      restoreNavigation()
     } catch (error) {
       errorMessage.value = error.message
     } finally {
@@ -257,6 +328,93 @@ export function useWorkspace(user) {
     return true
   }
 
+  async function updateSpace(spaceId, patch) {
+    if (!userId.value || !spaceId) return false
+
+    errorMessage.value = ''
+    const { data, error } = await supabase
+      .from('spaces')
+      .update(patch)
+      .eq('id', spaceId)
+      .eq('user_id', userId.value)
+      .select()
+      .single()
+
+    if (error) {
+      errorMessage.value = error.message
+      return false
+    }
+
+    spaces.value = sortByPosition(spaces.value.map((space) => (space.id === spaceId ? data : space)))
+    return true
+  }
+
+  async function updateList(listId, patch) {
+    if (!userId.value || !listId) return false
+
+    errorMessage.value = ''
+    const { data, error } = await supabase
+      .from('task_lists')
+      .update(patch)
+      .eq('id', listId)
+      .eq('user_id', userId.value)
+      .select()
+      .single()
+
+    if (error) {
+      errorMessage.value = error.message
+      return false
+    }
+
+    lists.value = sortByPosition(lists.value.map((list) => (list.id === listId ? data : list)))
+    return true
+  }
+
+  async function reorderSpaces(orderedIds) {
+    if (!userId.value || !orderedIds?.length) return false
+
+    errorMessage.value = ''
+    const updates = orderedIds.map((id, index) =>
+      supabase.from('spaces').update({ position: index }).eq('id', id).eq('user_id', userId.value),
+    )
+    const results = await Promise.all(updates)
+    const failed = results.find((result) => result.error)
+    if (failed?.error) {
+      errorMessage.value = failed.error.message
+      return false
+    }
+
+    const spaceMap = new Map(spaces.value.map((space) => [space.id, space]))
+    spaces.value = sortByPosition(orderedIds.map((id, index) => ({ ...spaceMap.get(id), position: index })))
+    return true
+  }
+
+  async function reorderLists(spaceId, orderedIds) {
+    if (!userId.value || !spaceId || !orderedIds?.length) return false
+
+    errorMessage.value = ''
+    const updates = orderedIds.map((id, index) =>
+      supabase
+        .from('task_lists')
+        .update({ position: index })
+        .eq('id', id)
+        .eq('user_id', userId.value)
+        .eq('space_id', spaceId),
+    )
+    const results = await Promise.all(updates)
+    const failed = results.find((result) => result.error)
+    if (failed?.error) {
+      errorMessage.value = failed.error.message
+      return false
+    }
+
+    const listMap = new Map(lists.value.map((list) => [list.id, list]))
+    const reordered = orderedIds.map((id, index) => ({ ...listMap.get(id), position: index }))
+    const others = lists.value.filter((list) => list.space_id !== spaceId)
+    lists.value = sortByPosition([...others, ...reordered])
+    return true
+  }
+
   async function deleteList(listId) {
     if (!userId.value || !listId) return false
 
@@ -276,10 +434,13 @@ export function useWorkspace(user) {
   watch(
     userId,
     () => {
+      canPersistNavigation = false
       fetchWorkspace()
     },
     { immediate: true },
   )
+
+  watch([activePage, activeSpaceId, activeListId, activeView], persistNavigation)
 
   return {
     spaces,
@@ -299,6 +460,10 @@ export function useWorkspace(user) {
     fetchWorkspace,
     createSpace,
     createList,
+    updateSpace,
+    updateList,
+    reorderSpaces,
+    reorderLists,
     deleteSpace,
     deleteList,
     selectDashboard,

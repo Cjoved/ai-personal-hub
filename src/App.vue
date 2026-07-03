@@ -3,12 +3,13 @@ import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import AuthForm from './components/AuthForm.vue'
 import BoardView from './components/BoardView.vue'
-import CalendarView from './components/CalendarView.vue'
+import AiSchedulerPanel from './components/AiSchedulerPanel.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import DashboardCards from './components/DashboardCards.vue'
 import OnboardingBanner from './components/OnboardingBanner.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import SpacesOverview from './components/SpacesOverview.vue'
+import TaskAssistant from './components/TaskAssistant.vue'
 import TaskEditor from './components/TaskEditor.vue'
 import TaskList from './components/TaskList.vue'
 import ToastStack from './components/ToastStack.vue'
@@ -39,6 +40,7 @@ const {
   errorMessage: workspaceErrorMessage,
   createSpace,
   createList,
+  fetchWorkspace,
   updateSpace,
   updateList,
   reorderSpaces,
@@ -55,7 +57,7 @@ const {
   selectedTag,
   searchQuery,
   allTags,
-  calendarTasks,
+  todayDashboardTasks,
   filteredTasks,
   boardColumns,
   dashboardStats,
@@ -82,10 +84,24 @@ const { confirmDelete } = useConfirm()
 const editingTask = ref(null)
 const creatingTask = ref(false)
 const showSettings = ref(false)
+const showScheduler = ref(false)
 const isSidebarOpen = ref(false)
 const headerRef = ref(null)
 
 const isLoadingWorkspace = computed(() => isWorkspaceLoading.value && isAuthenticated.value)
+
+function openScheduler() {
+  showScheduler.value = true
+}
+
+async function refreshAssistantData() {
+  await fetchWorkspace()
+  await fetchTasks()
+}
+
+function handleDashboardEditTask(task) {
+  editingTask.value = task
+}
 
 const newTaskTemplate = computed(() => ({
   id: null,
@@ -245,7 +261,7 @@ async function handleDeleteSpace(spaceId) {
       <AuthForm />
     </div>
 
-    <div v-else class="app-shell min-h-screen lg:grid lg:grid-cols-[18rem_1fr]">
+    <div v-else class="app-shell min-h-screen lg:grid lg:h-dvh lg:grid-cols-[18rem_1fr] lg:overflow-hidden">
       <div
         v-if="isSidebarOpen"
         class="sidebar-backdrop lg:hidden"
@@ -265,14 +281,17 @@ async function handleDeleteSpace(spaceId) {
         :create-list="createList"
         :update-list="updateList"
         :delete-list="deleteList"
+        :user-email="user.email"
         @select-dashboard="selectDashboard(); closeSidebar()"
         @select-spaces="selectSpaces(); closeSidebar()"
         @select-space="selectSpace($event); closeSidebar()"
         @select-list="selectList($event); closeSidebar()"
+        @open-settings="showSettings = true"
+        @sign-out="handleSignOut"
         @close="closeSidebar"
       />
 
-      <section class="app-main-bg min-h-screen min-w-0 w-full">
+      <section class="app-main-bg min-h-screen min-w-0 w-full lg:h-dvh lg:overflow-y-auto">
         <div class="w-full space-y-5 px-3 py-5 sm:px-4 lg:px-5">
           <OnboardingBanner :visible="!onboardingComplete" @complete="completeOnboarding" />
 
@@ -292,11 +311,10 @@ async function handleDeleteSpace(spaceId) {
             :user-email="user.email"
             :workspace-error="workspaceErrorMessage"
             :show-quick-add="Boolean(activeListId)"
-            @sign-out="handleSignOut"
             @add-task="openCreateTask"
             @quick-add-task="handleQuickAddTask"
-            @open-settings="showSettings = true"
             @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
+            @open-scheduler="openScheduler"
           />
 
           <p
@@ -311,7 +329,14 @@ async function handleDeleteSpace(spaceId) {
           </div>
 
           <template v-else>
-            <DashboardCards v-if="isDashboard" :stats="dashboardStats" title="Dashboard" breakdown-scope="home" />
+            <DashboardCards
+              v-if="isDashboard"
+              :stats="dashboardStats"
+              :today-tasks="todayDashboardTasks"
+              title="Dashboard"
+              breakdown-scope="home"
+              @edit-task="handleDashboardEditTask"
+            />
             <SpacesOverview
               v-else-if="isSpacesOverview"
               :spaces="spaces"
@@ -352,20 +377,13 @@ async function handleDeleteSpace(spaceId) {
               />
 
               <BoardView
-                v-else-if="activeView === 'board'"
+                v-else
                 :columns="boardColumns"
                 :is-loading="isTaskLoading"
                 :error-message="taskErrorMessage"
                 @update-task="handleUpdateTask"
                 @archive-task="handleArchiveTask"
                 @delete-task="handleDeleteTask"
-                @edit-task="(task) => (editingTask = task)"
-              />
-
-              <CalendarView
-                v-else
-                :tasks="calendarTasks"
-                :is-loading="isTaskLoading"
                 @edit-task="(task) => (editingTask = task)"
               />
             </template>
@@ -394,6 +412,16 @@ async function handleDeleteSpace(spaceId) {
         @update="updateSettings"
         @close="showSettings = false"
       />
+
+      <AiSchedulerPanel
+        v-if="showScheduler"
+        :list-id="activeListId"
+        :space-id="activeSpaceId"
+        :update-task="updateTask"
+        @close="showScheduler = false"
+      />
+
+      <TaskAssistant :on-data-change="refreshAssistantData" />
     </div>
 
     <ToastStack />

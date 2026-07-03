@@ -234,6 +234,23 @@ export function useTasks(user, workspace = {}) {
     searchedLocationTasks.value.filter((task) => task.due_date && task.status !== 'archived'),
   )
 
+  const todayDashboardTasks = computed(() => {
+    const all = tasksWithLocation.value.filter((task) => task.status !== 'archived')
+    const overdue = all.filter(isOverdue)
+    const dueToday = all.filter((task) => isDueToday(task) && isOpenTask(task))
+    const completedToday = all.filter((task) => {
+      if (task.status !== 'done' || !task.completed_at) return false
+      const completedAt = parseDate(task.completed_at)
+      return Boolean(completedAt && completedAt >= startOfToday() && completedAt <= endOfToday())
+    })
+
+    return {
+      overdue,
+      dueToday,
+      completedToday,
+    }
+  })
+
   function teardownRealtime() {
     if (realtimeChannel) {
       supabase.removeChannel(realtimeChannel)
@@ -735,6 +752,7 @@ export function useTasks(user, workspace = {}) {
     searchQuery,
     allTags,
     calendarTasks,
+    todayDashboardTasks,
     hasMoreTasks,
     dashboardTasks,
     locationTasks,

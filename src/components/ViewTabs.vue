@@ -2,7 +2,6 @@
 const views = [
   { value: 'list', label: 'List' },
   { value: 'board', label: 'Board' },
-  { value: 'calendar', label: 'Calendar' },
 ]
 
 defineProps({

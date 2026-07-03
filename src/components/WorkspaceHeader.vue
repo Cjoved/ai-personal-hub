@@ -69,11 +69,10 @@ const emit = defineEmits([
   'update:searchQuery',
   'update:selectedFilter',
   'update:selectedTag',
-  'sign-out',
   'add-task',
   'quick-add-task',
-  'open-settings',
   'toggle-sidebar',
+  'open-scheduler',
 ])
 
 const searchInputRef = ref(null)
@@ -171,42 +170,14 @@ defineExpose({ focusSearch })
         </div>
 
         <div class="flex items-center gap-2 sm:gap-3">
-          <button
-            class="grid h-10 w-10 place-items-center rounded-xl border border-slate-200/90 bg-white/80 text-slate-600 transition hover:bg-slate-50"
-            type="button"
-            title="Settings"
-            aria-label="Open settings"
-            @click="emit('open-settings')"
-          >
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-            </svg>
-          </button>
-
           <ThemeToggle />
 
-          <span class="toolbar-chip-neon type-body-sm flex min-w-0 max-w-64 items-center gap-2 truncate rounded-xl border border-slate-200/90 bg-slate-50/80 px-3 py-2 text-slate-600 dark:border-cyan-400/30 dark:bg-indigo-500/10 dark:text-cyan-200">
+          <span class="toolbar-chip-neon type-body-sm hidden min-w-0 max-w-64 items-center gap-2 truncate rounded-xl border border-slate-200/90 bg-slate-50/80 px-3 py-2 text-slate-600 dark:border-cyan-400/30 dark:bg-indigo-500/10 dark:text-cyan-200 md:flex">
             <span class="type-badge grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 text-white">
               {{ userInitial }}
             </span>
             <span class="hidden truncate sm:inline">{{ userEmail }}</span>
           </span>
-
-          <button
-            class="type-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200/90 bg-white text-slate-900 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus:outline-none focus:ring-4 focus:ring-rose-500/10 dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-rose-500/40 dark:hover:bg-rose-950/40 dark:hover:text-rose-300 sm:w-auto sm:px-4 sm:py-2.5"
-            type="button"
-            title="Sign out"
-            aria-label="Sign out"
-            @click="emit('sign-out')"
-          >
-            <svg class="h-4 w-4 sm:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <path d="M16 17l5-5-5-5" />
-              <path d="M21 12H9" />
-            </svg>
-            <span class="hidden sm:inline">Sign out</span>
-          </button>
         </div>
       </div>
     </div>
@@ -220,17 +191,21 @@ defineExpose({ focusSearch })
     </div>
 
     <div
-      v-if="activeList"
+      v-if="activeList || isDashboard"
       class="workspace-view-toolbar relative mt-4 border-t border-slate-200/80 pt-4"
     >
-      <ViewTabs :model-value="activeView" @update:model-value="emit('update:activeView', $event)" />
+      <ViewTabs v-if="activeList" :model-value="activeView" @update:model-value="emit('update:activeView', $event)" />
 
-      <span class="hidden h-6 w-px bg-slate-200 sm:block"></span>
+      <span v-if="activeList" class="hidden h-6 w-px bg-slate-200 sm:block"></span>
 
-      <TaskFilterMenu :model-value="selectedFilter" @update:model-value="emit('update:selectedFilter', $event)" />
+      <TaskFilterMenu
+        v-if="activeList"
+        :model-value="selectedFilter"
+        @update:model-value="emit('update:selectedFilter', $event)"
+      />
 
       <select
-        v-if="allTags.length"
+        v-if="activeList && allTags.length"
         class="type-input rounded-xl border border-slate-200/90 bg-white/90 px-2.5 py-2 text-sm dark:border-slate-600 dark:bg-slate-900/60"
         :value="selectedTag"
         @change="emit('update:selectedTag', $event.target.value)"
@@ -238,6 +213,15 @@ defineExpose({ focusSearch })
         <option value="">All tags</option>
         <option v-for="tag in allTags" :key="tag" :value="tag">{{ tag }}</option>
       </select>
+
+      <button
+        class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-violet-200/90 bg-violet-50 px-3 text-sm font-bold text-violet-700 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-200"
+        type="button"
+        title="AI Scheduler"
+        @click="emit('open-scheduler')"
+      >
+        Schedule
+      </button>
 
       <button
         class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20"

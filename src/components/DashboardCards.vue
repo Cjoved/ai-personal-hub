@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import DashboardBarChart from './DashboardBarChart.vue'
 import DashboardDonutChart from './DashboardDonutChart.vue'
+import TodayTasksPanel from './TodayTasksPanel.vue'
 import { getStatusNeonClass } from '../composables/statusNeon'
 
 const props = defineProps({
@@ -22,7 +23,13 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  todayTasks: {
+    type: Object,
+    default: null,
+  },
 })
+
+const emit = defineEmits(['edit-task'])
 
 const isHomeScope = computed(() => props.breakdownScope === 'home')
 
@@ -318,6 +325,12 @@ function taskLocation(task, scope = 'full') {
         </div>
       </div>
     </div>
+
+    <TodayTasksPanel
+      v-if="isHomeScope && todayTasks"
+      :today-tasks="todayTasks"
+      @edit-task="emit('edit-task', $event)"
+    />
 
     <!-- Space-specific hero -->
     <div

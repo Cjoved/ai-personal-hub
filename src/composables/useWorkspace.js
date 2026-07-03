@@ -159,7 +159,7 @@ export function useWorkspace(user) {
       activePage.value = saved.activePage || 'dashboard'
       activeSpaceId.value = saved.activeSpaceId || null
       activeListId.value = saved.activeListId || null
-      activeView.value = ['board', 'calendar'].includes(saved.activeView) ? saved.activeView : 'list'
+      activeView.value = saved.activeView === 'board' ? 'board' : 'list'
     }
 
     ensureActiveLocation()

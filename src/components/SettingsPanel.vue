@@ -77,7 +77,7 @@ function update(patch) {
         </div>
 
         <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-200/90 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/50">
-          <span class="type-body-sm font-semibold text-slate-700 dark:text-slate-200">Telegram daily reminders</span>
+          <span class="type-body-sm font-semibold text-slate-700 dark:text-slate-200">Telegram reminders (4x daily)</span>
           <input
             type="checkbox"
             class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
@@ -85,6 +85,18 @@ function update(patch) {
             @change="update({ telegramReminders: $event.target.checked })"
           />
         </label>
+
+        <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-200/90 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/50">
+          <span class="type-body-sm font-semibold text-slate-700 dark:text-slate-200">AI-enhanced Telegram digests</span>
+          <input
+            type="checkbox"
+            class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+            :checked="settings.aiTelegramDigest"
+            @change="update({ aiTelegramDigest: $event.target.checked })"
+          />
+        </label>
+
+        <p class="type-caption type-muted -mt-2">When off, reminders use the fixed template (recommended on free AI tiers).</p>
       </div>
     </section>
   </div>

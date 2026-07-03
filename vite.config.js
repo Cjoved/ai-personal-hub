@@ -4,6 +4,10 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  server: {
+    port: Number(process.env.PORT) || 5173,
+    strictPort: Boolean(process.env.PORT),
+  },
   plugins: [
     vue(),
     tailwindcss(),

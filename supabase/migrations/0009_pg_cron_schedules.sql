@@ -38,13 +38,12 @@ begin
     return null;
   end if;
 
-  select net.http_post(
+  select net.http_get(
     url := rtrim(app_url, '/') || '/api/cron/task-reminder?slot=' || p_slot,
     headers := jsonb_build_object(
-      'Authorization', 'Bearer ' || cron_secret,
-      'Content-Type', 'application/json'
+      'Authorization', 'Bearer ' || cron_secret
     ),
-    body := '{}'::jsonb
+    timeout_milliseconds := 60000
   )
   into req_id;
 

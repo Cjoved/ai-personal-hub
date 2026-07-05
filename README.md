@@ -23,7 +23,7 @@ A personal task dashboard built with Vue 3, Vite, Tailwind CSS, Supabase, and Ve
 | Hosting | Vercel (static app + serverless API routes) |
 | Schedulers | Supabase **pg_cron** + **pg_net** (0 Vercel crons on Hobby) |
 | Notifications | Telegram Bot API |
-| AI | OpenRouter → NVIDIA NIM → Groq → Cerebras → Mistral (fixed template fallback for Telegram) |
+| AI | Gemini → OpenRouter → Groq → Cerebras → NVIDIA → Mistral (fixed template fallback for Telegram) |
 
 ---
 
@@ -153,20 +153,24 @@ CRON_SECRET=generate-a-long-random-string
 APP_URL=https://your-app.vercel.app
 
 # AI (optional — scheduler, chat, AI Telegram digests)
+# GEMINI_API_KEY: https://aistudio.google.com/apikey
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
 OPENROUTER_API_KEY=
-OPENROUTER_MODEL=openrouter/free
-NVIDIA_API_KEY=
-NVIDIA_MODEL=meta/llama-3.3-70b-instruct
+OPENROUTER_MODEL=meta-llama/llama-3.1-8b-instruct:free
 GROQ_API_KEY=
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=llama-3.1-8b-instant
 CEREBRAS_API_KEY=
-CEREBRAS_MODEL=llama-3.3-70b
+CEREBRAS_MODEL=llama3.1-8b
+NVIDIA_API_KEY=
+NVIDIA_MODEL=meta/llama-3.1-8b-instruct
 MISTRAL_API_KEY=
 MISTRAL_MODEL=mistral-small-latest
+AI_GEMINI_MONTHLY_LIMIT=1200
 AI_OPENROUTER_MONTHLY_LIMIT=1200
-AI_NVIDIA_MONTHLY_LIMIT=2000
 AI_GROQ_MONTHLY_LIMIT=1500
 AI_CEREBRAS_MONTHLY_LIMIT=1500
+AI_NVIDIA_MONTHLY_LIMIT=1500
 AI_MISTRAL_MONTHLY_LIMIT=1500
 AI_DAILY_CHAT_LIMIT=40
 AI_PENDING_SECRET=
@@ -179,7 +183,7 @@ AI_PENDING_SECRET=
 | `VITE_ALLOWED_EMAIL` | Recommended | Restricts sign-in to one email |
 | `SUPABASE_*` / `ALLOWED_USER_EMAIL` | No (local UI) | Needed for cron + AI API routes |
 | `TELEGRAM_*` / `CRON_SECRET` | No (local UI) | Needed for Telegram reminders |
-| `OPENROUTER_*` / `NVIDIA_*` / `GROQ_*` / `CEREBRAS_*` / `MISTRAL_*` | No | AI features; fixed template used when unset |
+| `GEMINI_*` / `OPENROUTER_*` / `GROQ_*` / `CEREBRAS_*` / `NVIDIA_*` / `MISTRAL_*` | No | AI features; fixed template used when unset |
 | `AI_*_MONTHLY_LIMIT` / `AI_DAILY_CHAT_LIMIT` | No | Per-provider monthly caps and daily assistant cap |
 | `AI_PENDING_SECRET` | No (local UI) | Signs pending write actions for Execute; falls back to `CRON_SECRET` |
 
@@ -329,6 +333,8 @@ In **Vercel → Project → Settings → Environment Variables**, add:
 | `TELEGRAM_CHAT_ID` | Production | Yes |
 | `CRON_SECRET` | Production | **Yes** |
 | `APP_URL` | Production | No |
+| `GEMINI_API_KEY` | Production | Yes (optional) |
+| `GEMINI_MODEL` | Production | No |
 | `OPENROUTER_API_KEY` | Production | Yes (optional) |
 | `OPENROUTER_MODEL` | Production | No |
 | `NVIDIA_API_KEY` | Production | Yes (optional) |
@@ -339,6 +345,7 @@ In **Vercel → Project → Settings → Environment Variables**, add:
 | `CEREBRAS_MODEL` | Production | No |
 | `MISTRAL_API_KEY` | Production | Yes (optional) |
 | `MISTRAL_MODEL` | Production | No |
+| `AI_GEMINI_MONTHLY_LIMIT` | Production | No |
 | `AI_OPENROUTER_MONTHLY_LIMIT` | Production | No |
 | `AI_NVIDIA_MONTHLY_LIMIT` | Production | No |
 | `AI_GROQ_MONTHLY_LIMIT` | Production | No |
@@ -439,11 +446,12 @@ The assistant tries providers **in order** until one succeeds. Usage is tracked 
 |---------|-------|-----|
 | Vercel Hobby | 0 multi-fire crons/day | Use Supabase pg_cron for 4× daily reminders |
 | Supabase | 500 MB DB, pauses if inactive | Monthly done-task cleanup + weekly `job_run_details` purge |
-| OpenRouter free | ~50 requests/day | Primary AI; chain falls through on rate limits |
-| NVIDIA NIM | RPM limits | Secondary fallback |
-| Groq | Free tier RPM/TPM | Third fallback — fast Llama 3.3 70B |
-| Cerebras | Free tier limits | Fourth fallback |
-| Mistral | Experiment plan limits | Fifth fallback — [console.mistral.ai](https://console.mistral.ai) |
+| Gemini (AI Studio free) | 10 RPM, 1,500 RPD on Flash | Primary — `gemini-2.5-flash`; use `gemini-2.5-flash-lite` for lighter jobs |
+| OpenRouter free | Varies by model | Fallback — default `llama-3.1-8b-instruct:free` (avoid `openrouter/free` router) |
+| Groq | Free tier RPM/TPM | `llama-3.1-8b-instant` — ultra fast |
+| Cerebras | Free tier limits | `llama3.1-8b` — speed-critical fallback |
+| NVIDIA NIM | RPM limits | `llama-3.1-8b-instruct` fallback |
+| Mistral | Experiment plan limits | `mistral-small-latest` — last resort |
 | Assistant chat | `AI_DAILY_CHAT_LIMIT` (default 40/day) | One LLM call per message; writes need Execute |
 | Voice (browser) | Client-side STT/TTS | Safari has limited support |
 

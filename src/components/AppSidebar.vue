@@ -27,6 +27,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  isGoalsOverview: {
+    type: Boolean,
+    default: false,
+  },
   createList: {
     type: Function,
     required: true,
@@ -45,7 +49,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select-dashboard', 'select-spaces', 'select-space', 'select-list', 'close', 'open-settings', 'sign-out'])
+const emit = defineEmits(['select-dashboard', 'select-spaces', 'select-goals', 'select-space', 'select-list', 'close', 'open-settings', 'sign-out'])
 
 const expandedSpaceIds = ref(new Set())
 const addingSpaceId = ref(null)
@@ -153,6 +157,25 @@ watch(
         </span>
         <span class="flex-1 text-left">Dashboard</span>
         <span v-if="isDashboard" class="type-badge rounded-full bg-emerald-500/20 px-2 py-0.5 uppercase tracking-wide text-emerald-300">
+          Active
+        </span>
+      </button>
+
+      <button
+        class="type-nav flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition"
+        :class="navItemClass(isGoalsOverview)"
+        type="button"
+        @click="emit('select-goals')"
+      >
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-amber-300 ring-1 ring-white/10">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="8" />
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+          </svg>
+        </span>
+        <span class="flex-1 text-left">Goals</span>
+        <span v-if="isGoalsOverview" class="type-badge rounded-full bg-amber-500/20 px-2 py-0.5 uppercase tracking-wide text-amber-300">
           Active
         </span>
       </button>

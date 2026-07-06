@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import GoalMotivationBanner from './GoalMotivationBanner.vue'
 import QuickAddTask from './QuickAddTask.vue'
 import TaskFilterMenu from './TaskFilterMenu.vue'
 import ThemeToggle from './ThemeToggle.vue'
@@ -17,6 +18,14 @@ const props = defineProps({
   isSpacesOverview: {
     type: Boolean,
     default: false,
+  },
+  isGoalsOverview: {
+    type: Boolean,
+    default: false,
+  },
+  featuredGoal: {
+    type: Object,
+    default: null,
   },
   activeSpace: {
     type: Object,
@@ -73,12 +82,14 @@ const emit = defineEmits([
   'quick-add-task',
   'toggle-sidebar',
   'open-scheduler',
+  'go-to-goals',
 ])
 
 const searchInputRef = ref(null)
 
 const pageTitle = computed(() => {
   if (props.isDashboard) return 'Dashboard'
+  if (props.isGoalsOverview) return 'Goals'
   if (props.isSpacesOverview) return 'Spaces'
   if (props.isSpaceSummary && props.activeSpace) return `${props.activeSpace.name} Dashboard`
   return props.activeList?.name || props.activeSpace?.name || 'Workspace'
@@ -86,6 +97,7 @@ const pageTitle = computed(() => {
 
 const contextLabel = computed(() => {
   if (props.isDashboard) return 'Home'
+  if (props.isGoalsOverview) return 'Motivation'
   if (props.isSpacesOverview) return 'Workspace'
   if (props.isSpaceSummary) return 'Space dashboard'
   return 'Workspace location'
@@ -128,6 +140,11 @@ defineExpose({ focusSearch })
               <svg v-if="isDashboard" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 10.5 12 3l9 7.5" />
                 <path d="M5 9.5V20h14V9.5" />
+              </svg>
+              <svg v-else-if="isGoalsOverview" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="8" />
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
               </svg>
               <svg v-else-if="isSpacesOverview" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -223,7 +240,16 @@ defineExpose({ focusSearch })
         Schedule
       </button>
 
+      <GoalMotivationBanner
+        v-if="isDashboard"
+        class="min-w-0 flex-1"
+        :goal="featuredGoal"
+        compact
+        @go-to-goals="emit('go-to-goals')"
+      />
+
       <button
+        v-if="activeList"
         class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20"
         type="button"
         title="Add task (N)"

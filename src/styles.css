@@ -2397,16 +2397,9 @@ button {
 
 .workspace-view-toolbar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.workspace-view-toolbar::-webkit-scrollbar {
-  display: none;
 }
 
 @media (max-width: 767px) {

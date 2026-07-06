@@ -6,6 +6,8 @@ import BoardView from './components/BoardView.vue'
 import AiSchedulerPanel from './components/AiSchedulerPanel.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import DashboardCards from './components/DashboardCards.vue'
+import GoalEditor from './components/GoalEditor.vue'
+import GoalsPanel from './components/GoalsPanel.vue'
 import OnboardingBanner from './components/OnboardingBanner.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import SpacesOverview from './components/SpacesOverview.vue'
@@ -16,6 +18,7 @@ import ToastStack from './components/ToastStack.vue'
 import WorkspaceHeader from './components/WorkspaceHeader.vue'
 import { useAuth } from './composables/useAuth'
 import { useConfirm } from './composables/useConfirm'
+import { useGoals } from './composables/useGoals'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 import { useSettings } from './composables/useSettings'
 import { useTasks } from './composables/useTasks'
@@ -35,6 +38,7 @@ const {
   activeList,
   isDashboard,
   isSpacesOverview,
+  isGoalsOverview,
   locationLabel,
   isLoading: isWorkspaceLoading,
   errorMessage: workspaceErrorMessage,
@@ -48,9 +52,21 @@ const {
   deleteList,
   selectDashboard,
   selectSpaces,
+  selectGoals,
   selectSpace,
   selectList,
 } = workspace
+
+const {
+  goals,
+  featuredGoal,
+  isLoading: isGoalsLoading,
+  errorMessage: goalsErrorMessage,
+  createGoal,
+  updateGoal,
+  deleteGoal,
+  fetchGoals,
+} = useGoals(user)
 
 const {
   selectedFilter,
@@ -83,6 +99,8 @@ const { confirmDelete } = useConfirm()
 
 const editingTask = ref(null)
 const creatingTask = ref(false)
+const editingGoal = ref(null)
+const creatingGoal = ref(false)
 const showSettings = ref(false)
 const showScheduler = ref(false)
 const isSidebarOpen = ref(false)
@@ -97,6 +115,7 @@ function openScheduler() {
 async function refreshAssistantData() {
   await fetchWorkspace()
   await fetchTasks()
+  await fetchGoals()
 }
 
 function handleDashboardEditTask(task) {
@@ -136,6 +155,7 @@ useKeyboardShortcuts({
   },
   escape: () => {
     closeTaskEditor()
+    closeGoalEditor()
     showSettings.value = false
     isSidebarOpen.value = false
   },
@@ -149,6 +169,26 @@ function openCreateTask() {
 function closeTaskEditor() {
   editingTask.value = null
   creatingTask.value = false
+}
+
+function openCreateGoal() {
+  editingGoal.value = null
+  creatingGoal.value = true
+}
+
+function openEditGoal(goal) {
+  editingGoal.value = goal
+  creatingGoal.value = false
+}
+
+function closeGoalEditor() {
+  editingGoal.value = null
+  creatingGoal.value = false
+}
+
+function goToGoals() {
+  selectGoals()
+  closeSidebar()
 }
 
 function closeSidebar() {
@@ -234,6 +274,7 @@ async function handleDeleteSubtask(subtaskId) {
 
 async function handleSignOut() {
   closeTaskEditor()
+  closeGoalEditor()
   showSettings.value = false
   await signOut()
   selectDashboard()
@@ -246,6 +287,41 @@ async function handleDeleteSpace(spaceId) {
     await fetchTasks()
   }
   return didDelete
+}
+
+async function handleSaveGoal(payload) {
+  if (payload.id) {
+    const didUpdate = await updateGoal(payload.id, {
+      title: payload.title,
+      description: payload.description,
+      starts_at: payload.starts_at,
+      ends_at: payload.ends_at,
+      color: payload.color,
+    })
+    if (didUpdate) {
+      closeGoalEditor()
+      toast.success('Goal updated')
+      return
+    }
+  } else {
+    const created = await createGoal(payload)
+    if (created) {
+      closeGoalEditor()
+      toast.success('Goal created')
+      return
+    }
+  }
+  if (goalsErrorMessage.value) toast.error(goalsErrorMessage.value)
+}
+
+async function handleDeleteGoal(goalId) {
+  const goal = goals.value.find((item) => item.id === goalId)
+  const confirmed = await confirmDelete('goal', goal?.title)
+  if (!confirmed) return
+
+  const didDelete = await deleteGoal(goalId)
+  if (didDelete) toast.success('Goal deleted')
+  else if (goalsErrorMessage.value) toast.error(goalsErrorMessage.value)
 }
 </script>
 
@@ -278,12 +354,14 @@ async function handleDeleteSpace(spaceId) {
         :active-list-id="activeListId"
         :is-dashboard="isDashboard"
         :is-spaces-overview="isSpacesOverview"
+        :is-goals-overview="isGoalsOverview"
         :create-list="createList"
         :update-list="updateList"
         :delete-list="deleteList"
         :user-email="user.email"
         @select-dashboard="selectDashboard(); closeSidebar()"
         @select-spaces="selectSpaces(); closeSidebar()"
+        @select-goals="selectGoals(); closeSidebar()"
         @select-space="selectSpace($event); closeSidebar()"
         @select-list="selectList($event); closeSidebar()"
         @open-settings="showSettings = true"
@@ -304,7 +382,9 @@ async function handleDeleteSpace(spaceId) {
             :location-label="locationLabel"
             :is-dashboard="isDashboard"
             :is-spaces-overview="isSpacesOverview"
-            :is-space-summary="Boolean(activeSpaceId && !activeListId && !isDashboard && !isSpacesOverview)"
+            :is-goals-overview="isGoalsOverview"
+            :featured-goal="featuredGoal"
+            :is-space-summary="Boolean(activeSpaceId && !activeListId && !isDashboard && !isSpacesOverview && !isGoalsOverview)"
             :active-space="activeSpace"
             :active-list="activeList"
             :all-tags="allTags"
@@ -315,6 +395,7 @@ async function handleDeleteSpace(spaceId) {
             @quick-add-task="handleQuickAddTask"
             @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
             @open-scheduler="openScheduler"
+            @go-to-goals="goToGoals"
           />
 
           <p
@@ -350,6 +431,14 @@ async function handleDeleteSpace(spaceId) {
               :reorder-spaces="reorderSpaces"
               @select-space="selectSpace"
               @select-list="selectList"
+            />
+            <GoalsPanel
+              v-else-if="isGoalsOverview"
+              :goals="goals"
+              :is-loading="isGoalsLoading"
+              @create-goal="openCreateGoal"
+              @edit-goal="openEditGoal"
+              @delete-goal="handleDeleteGoal"
             />
             <DashboardCards
               v-else-if="!activeListId"
@@ -403,6 +492,13 @@ async function handleDeleteSpace(spaceId) {
         @save-task="handleSaveTask"
         @create-task="handleCreateTask"
         @close="closeTaskEditor"
+      />
+
+      <GoalEditor
+        :is-open="creatingGoal || Boolean(editingGoal)"
+        :goal="editingGoal"
+        @save="handleSaveGoal"
+        @close="closeGoalEditor"
       />
 
       <SettingsPanel

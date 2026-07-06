@@ -70,9 +70,11 @@ export function useWorkspace(user) {
   )
   const isDashboard = computed(() => activePage.value === 'dashboard' && !activeSpaceId.value && !activeListId.value)
   const isSpacesOverview = computed(() => activePage.value === 'spaces' && !activeSpaceId.value && !activeListId.value)
+  const isGoalsOverview = computed(() => activePage.value === 'goals' && !activeSpaceId.value && !activeListId.value)
   const locationLabel = computed(() => {
     if (activeList.value && activeSpace.value) return `${activeSpace.value.name} / ${activeList.value.name}`
     if (activeSpace.value) return activeSpace.value.name
+    if (isGoalsOverview.value) return 'Set motivational goals with a visible countdown'
     if (isSpacesOverview.value) return 'Manage and organize your spaces'
     if (isDashboard.value) return 'Overview of all spaces and tasks'
     return 'Dashboard'
@@ -86,6 +88,12 @@ export function useWorkspace(user) {
 
   function selectSpaces() {
     activePage.value = 'spaces'
+    activeSpaceId.value = null
+    activeListId.value = null
+  }
+
+  function selectGoals() {
+    activePage.value = 'goals'
     activeSpaceId.value = null
     activeListId.value = null
   }
@@ -132,7 +140,7 @@ export function useWorkspace(user) {
       return
     }
 
-    if (activePage.value === 'spaces') {
+    if (activePage.value === 'spaces' || activePage.value === 'goals') {
       return
     }
 
@@ -454,6 +462,7 @@ export function useWorkspace(user) {
     activeSpaceLists,
     isDashboard,
     isSpacesOverview,
+    isGoalsOverview,
     locationLabel,
     isLoading,
     errorMessage,
@@ -468,6 +477,7 @@ export function useWorkspace(user) {
     deleteList,
     selectDashboard,
     selectSpaces,
+    selectGoals,
     selectSpace,
     selectList,
   }

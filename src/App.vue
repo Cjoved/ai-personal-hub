@@ -370,7 +370,7 @@ async function handleDeleteGoal(goalId) {
       />
 
       <section class="app-main-bg min-h-screen min-w-0 w-full lg:h-dvh lg:overflow-y-auto">
-        <div class="w-full space-y-5 px-3 py-5 sm:px-4 lg:px-5">
+        <div class="app-content-shell w-full space-y-5 px-3 py-5 sm:px-4 lg:px-5">
           <OnboardingBanner :visible="!onboardingComplete" @complete="completeOnboarding" />
 
           <WorkspaceHeader

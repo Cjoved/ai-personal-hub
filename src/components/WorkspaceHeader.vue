@@ -242,7 +242,7 @@ defineExpose({ focusSearch })
 
       <GoalMotivationBanner
         v-if="isDashboard"
-        class="min-w-0 flex-1"
+        class="min-w-0 max-w-xl flex-1"
         :goal="featuredGoal"
         compact
         @go-to-goals="emit('go-to-goals')"

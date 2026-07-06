@@ -282,14 +282,14 @@ function taskLocation(task, scope = 'full') {
 
 <template>
   <section
-    class="dashboard-shell dashboard-grid space-y-5 rounded-3xl p-1 sm:p-2"
+    class="dashboard-shell dashboard-grid space-y-6 rounded-3xl p-1 sm:p-2"
     :class="isHomeScope ? 'dashboard-home' : 'dashboard-space'"
     :style="spaceThemeStyle"
   >
     <!-- Home command center hero -->
     <div
       v-if="isHomeScope"
-      class="dashboard-hero-home relative overflow-hidden rounded-3xl border border-indigo-500/20 p-5 sm:p-6 lg:p-7"
+      class="dashboard-hero-home relative overflow-hidden rounded-3xl border border-indigo-500/20 p-6 sm:p-7 lg:p-8"
     >
       <div class="dashboard-hero-shine"></div>
       <div class="pointer-events-none absolute -right-10 -top-10 h-52 w-52 rounded-full bg-emerald-500/20 blur-3xl"></div>
@@ -335,7 +335,7 @@ function taskLocation(task, scope = 'full') {
     <!-- Space-specific hero -->
     <div
       v-else
-      class="dashboard-hero-space relative overflow-hidden rounded-3xl border p-5 sm:p-6 lg:p-7"
+      class="dashboard-hero-space relative overflow-hidden rounded-3xl border p-6 sm:p-7 lg:p-8"
       :style="spaceThemeStyle"
     >
       <div class="dashboard-hero-space-bar pointer-events-none absolute inset-x-0 top-0 h-1.5"></div>
@@ -345,7 +345,7 @@ function taskLocation(task, scope = 'full') {
       <div class="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-start gap-4">
           <span
-            class="dashboard-space-avatar grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-xl font-black text-white shadow-lg"
+            class="dashboard-space-avatar grid h-[4.5rem] w-[4.5rem] shrink-0 place-items-center rounded-2xl text-2xl font-black text-white shadow-lg"
           >
             {{ spaceInitial() }}
           </span>
@@ -373,47 +373,47 @@ function taskLocation(task, scope = 'full') {
       </div>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
       <article
         v-for="card in visibleStatCards"
         :key="card.key"
-        class="dashboard-card dashboard-stat-card rounded-2xl p-5"
+        class="dashboard-card dashboard-stat-card rounded-2xl"
         :class="[card.border, isHomeScope ? '' : 'dashboard-space-stat-card']"
       >
-        <span class="absolute inset-y-0 left-0 w-1 rounded-l-2xl" :class="card.accentBar"></span>
-        <span class="pointer-events-none absolute -right-1 -top-1 h-20 w-20 rounded-full opacity-40 blur-2xl" :class="card.glow"></span>
+        <span class="absolute inset-y-0 left-0 w-1.5 rounded-l-2xl" :class="card.accentBar"></span>
+        <span class="pointer-events-none absolute -right-1 -top-1 h-24 w-24 rounded-full opacity-40 blur-2xl" :class="card.glow"></span>
 
         <div class="relative flex items-start justify-between gap-3">
           <div>
             <p class="type-label type-muted">{{ card.label }}</p>
-            <p class="type-stat mt-3" :class="card.tone">
+            <p class="type-stat mt-3.5" :class="card.tone">
               {{ statValue(card) }}{{ card.suffix || '' }}
             </p>
           </div>
 
-          <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl ring-1 ring-inset ring-white/70" :class="card.iconBg">
-            <svg v-if="card.key === 'spaceCount'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl ring-1 ring-inset ring-white/70" :class="card.iconBg">
+            <svg v-if="card.key === 'spaceCount'" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
               <rect x="3" y="14" width="7" height="7" rx="1" />
               <rect x="14" y="14" width="7" height="7" rx="1" />
             </svg>
-            <svg v-else-if="card.key === 'totalLists'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-else-if="card.key === 'totalLists'" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 7h16M4 12h10M4 17h7" />
             </svg>
-            <svg v-else-if="card.key === 'openTasks'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-else-if="card.key === 'openTasks'" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
               <rect x="9" y="3" width="6" height="4" rx="1" />
               <path d="M9 12h6M9 16h4" />
             </svg>
-            <svg v-else-if="card.key === 'overdue'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-else-if="card.key === 'overdue'" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="9" />
               <path d="M12 7v6l3 2" />
             </svg>
-            <svg v-else-if="card.key === 'totalTasks'" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-else-if="card.key === 'totalTasks'" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 7h16M4 12h16M4 17h10" />
             </svg>
-            <svg v-else class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-else class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 6 9 17l-5-5" />
             </svg>
           </span>
@@ -423,7 +423,7 @@ function taskLocation(task, scope = 'full') {
 
     <!-- HOME: spaces-first layout -->
     <template v-if="isHomeScope">
-      <article class="dashboard-card dashboard-feature-card rounded-2xl p-5 sm:p-6">
+      <article class="dashboard-card dashboard-feature-card rounded-2xl">
         <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p class="dashboard-section-kicker mb-1">Workspace overview</p>
@@ -447,13 +447,13 @@ function taskLocation(task, scope = 'full') {
           <div
             v-for="space in stats.spaceStats"
             :key="space.id"
-            class="neon-space-progress-card dashboard-feature-space-card flex h-full flex-col rounded-2xl p-5 sm:p-6"
+            class="neon-space-progress-card dashboard-feature-space-card flex h-full flex-col rounded-2xl"
             :style="rowColorStyle(space)"
           >
             <div class="mb-4 flex items-start justify-between gap-3">
               <div class="flex min-w-0 items-center gap-3">
                 <span
-                  class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-sm font-black text-white shadow-md"
+                  class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-base font-black text-white shadow-md"
                   :style="{ background: space.color || '#6366f1' }"
                 >
                   {{ space.name?.slice(0, 1)?.toUpperCase() || 'S' }}
@@ -473,7 +473,7 @@ function taskLocation(task, scope = 'full') {
               <span>Progress</span>
               <span>{{ space.done }} / {{ space.total }} done</span>
             </div>
-            <div class="neon-progress-track h-3 overflow-hidden rounded-full" :style="rowColorStyle(space)">
+            <div class="neon-progress-track h-3.5 overflow-hidden rounded-full" :style="rowColorStyle(space)">
               <span class="block h-full rounded-full" :style="{ width: `${space.completionRate}%`, background: space.color || '#6366f1' }"></span>
             </div>
 
@@ -490,7 +490,7 @@ function taskLocation(task, scope = 'full') {
 
     <!-- SPACE: lists-first layout -->
     <template v-else>
-      <article class="dashboard-card dashboard-feature-card dashboard-space-feature rounded-2xl p-5 sm:p-6" :style="spaceThemeStyle">
+      <article class="dashboard-card dashboard-feature-card dashboard-space-feature rounded-2xl" :style="spaceThemeStyle">
         <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p class="dashboard-section-kicker dashboard-space-breakdown-label mb-1">Inside this space</p>
@@ -514,13 +514,13 @@ function taskLocation(task, scope = 'full') {
           <div
             v-for="list in stats.listStats"
             :key="list.id"
-            class="neon-space-progress-card dashboard-feature-space-card flex h-full flex-col rounded-2xl p-5 sm:p-6"
+            class="neon-space-progress-card dashboard-feature-space-card flex h-full flex-col rounded-2xl"
             :style="spaceThemeStyle"
           >
             <div class="mb-4 flex items-start justify-between gap-3">
               <div class="flex min-w-0 items-center gap-3">
-                <span class="dashboard-space-list-dot grid h-12 w-12 shrink-0 place-items-center rounded-2xl">
-                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <span class="dashboard-space-list-dot grid h-14 w-14 shrink-0 place-items-center rounded-2xl">
+                  <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 7h16M4 12h10M4 17h7" />
                   </svg>
                 </span>
@@ -539,7 +539,7 @@ function taskLocation(task, scope = 'full') {
               <span>Progress</span>
               <span>{{ list.done }} / {{ list.total }} done</span>
             </div>
-            <div class="neon-progress-track h-3 overflow-hidden rounded-full" :style="spaceThemeStyle">
+            <div class="neon-progress-track h-3.5 overflow-hidden rounded-full" :style="spaceThemeStyle">
               <span class="block h-full rounded-full" :style="{ width: `${list.completionRate}%`, background: spaceAccentColor }"></span>
             </div>
 
@@ -555,11 +555,11 @@ function taskLocation(task, scope = 'full') {
     </template>
 
     <div class="dashboard-analytics-grid dashboard-analytics-grid--pair">
-      <article class="dashboard-card dashboard-analytics-card rounded-2xl p-4 sm:p-5">
+      <article class="dashboard-card dashboard-analytics-card rounded-2xl">
         <div class="mb-3 flex items-start justify-between gap-3">
           <div class="flex min-w-0 items-start gap-2.5">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600 ring-1 ring-indigo-500/15">
-              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600 ring-1 ring-indigo-500/15">
+              <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 3v18h18" />
                 <path d="M7 14l4-4 3 3 5-6" />
               </svg>
@@ -583,10 +583,10 @@ function taskLocation(task, scope = 'full') {
         />
       </article>
 
-      <article class="dashboard-card dashboard-analytics-card rounded-2xl p-4 sm:p-5">
+      <article class="dashboard-card dashboard-analytics-card rounded-2xl">
         <div class="mb-3 flex items-start gap-2.5">
-          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/15">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/15">
+            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7L2 9.4h7.6z" />
             </svg>
           </span>
@@ -608,11 +608,11 @@ function taskLocation(task, scope = 'full') {
       </article>
     </div>
 
-    <div class="grid gap-4 xl:grid-cols-2">
-      <article class="dashboard-card rounded-2xl p-5 sm:p-6">
+    <div class="grid gap-5 xl:grid-cols-2">
+      <article class="dashboard-card rounded-2xl">
         <div class="mb-4 flex items-center gap-3">
-          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-500/10 text-violet-600 ring-1 ring-violet-500/15">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-500/10 text-violet-600 ring-1 ring-violet-500/15">
+            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="4" width="18" height="18" rx="2" />
               <path d="M16 2v4M8 2v4M3 10h18" />
             </svg>
@@ -631,7 +631,7 @@ function taskLocation(task, scope = 'full') {
           <li
             v-for="task in stats.upcomingDeadlines"
             :key="task.id"
-            class="neon-dash-hover-row neon-inbox flex items-center justify-between gap-3 px-3 py-2.5"
+            class="neon-dash-hover-row neon-inbox flex items-center justify-between gap-3 px-3.5 py-3"
           >
             <div class="min-w-0">
               <span class="type-task-title block truncate text-slate-800 dark:text-slate-100">{{ task.title }}</span>
@@ -647,10 +647,10 @@ function taskLocation(task, scope = 'full') {
         <p v-if="!stats.upcomingDeadlines?.length" class="text-sm text-slate-500">No upcoming deadlines yet.</p>
       </article>
 
-      <article class="dashboard-card rounded-2xl p-5 sm:p-6">
+      <article class="dashboard-card rounded-2xl">
         <div class="mb-4 flex items-center gap-3">
-          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-fuchsia-500/10 text-fuchsia-600 ring-1 ring-fuchsia-500/15">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-fuchsia-500/10 text-fuchsia-600 ring-1 ring-fuchsia-500/15">
+            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 8v5l3 2" />
               <circle cx="12" cy="12" r="9" />
             </svg>

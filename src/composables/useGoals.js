@@ -46,6 +46,18 @@ export function formatGoalDate(value) {
   }).format(new Date(value))
 }
 
+export function goalTimeProgress(goal, now = new Date()) {
+  if (!goal?.starts_at || !goal?.ends_at) return 0
+
+  const start = new Date(goal.starts_at).getTime()
+  const end = new Date(goal.ends_at).getTime()
+  const current = now.getTime()
+
+  if (end <= start) return 100
+  const pct = ((current - start) / (end - start)) * 100
+  return Math.min(100, Math.max(0, Math.round(pct)))
+}
+
 export function useGoals(user) {
   const goals = ref([])
   const isLoading = ref(false)
@@ -218,5 +230,6 @@ export function useGoals(user) {
     goalCountdown,
     formatGoalCountdown,
     formatGoalDate,
+    goalTimeProgress,
   }
 }

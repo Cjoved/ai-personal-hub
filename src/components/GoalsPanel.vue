@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
-import GoalMotivationBanner from './GoalMotivationBanner.vue'
-import { canDeleteGoal, formatGoalCountdown, formatGoalDate, isGoalEnded } from '../composables/useGoals'
+import GoalCard from './GoalCard.vue'
+import { canDeleteGoal, isGoalEnded } from '../composables/useGoals'
 
 const props = defineProps({
   goals: {
@@ -39,7 +39,7 @@ const endedGoals = computed(() =>
         </p>
       </div>
       <button
-        class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 text-sm font-bold text-white shadow-md shadow-emerald-600/20"
+        class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 text-sm font-bold text-white shadow-md shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-emerald-400"
         type="button"
         @click="$emit('create-goal')"
       >
@@ -59,39 +59,17 @@ const endedGoals = computed(() =>
 
     <template v-else>
       <div v-if="activeGoals.length" class="space-y-4">
-        <h3 class="type-kicker text-slate-700 dark:text-slate-300">Active goals</h3>
+        <h3 class="type-kicker flex items-center gap-2 text-slate-700 dark:text-slate-300">
+          <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+          Active goals
+        </h3>
         <div class="grid gap-4 xl:grid-cols-2">
-          <article
+          <GoalCard
             v-for="goal in activeGoals"
             :key="goal.id"
-            class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
-          >
-            <GoalMotivationBanner :goal="goal" />
-            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 dark:border-slate-700">
-              <p class="type-caption type-muted">
-                {{ formatGoalDate(goal.starts_at) }} → {{ formatGoalDate(goal.ends_at) }}
-                <span class="mx-1">·</span>
-                {{ formatGoalCountdown(goal) }}
-              </p>
-              <div class="flex gap-2">
-                <button
-                  class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                  type="button"
-                  @click="$emit('edit-goal', goal)"
-                >
-                  Edit
-                </button>
-                <button
-                  class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-400 dark:border-slate-700"
-                  type="button"
-                  disabled
-                  title="Delete becomes available after the timeframe ends"
-                >
-                  Locked
-                </button>
-              </div>
-            </div>
-          </article>
+            :goal="goal"
+            @edit="$emit('edit-goal', $event)"
+          />
         </div>
       </div>
 
@@ -112,28 +90,19 @@ const endedGoals = computed(() =>
       </div>
 
       <div v-if="endedGoals.length" class="space-y-4">
-        <h3 class="type-kicker text-slate-500">Ended goals</h3>
+        <h3 class="type-kicker flex items-center gap-2 text-slate-500">
+          <span class="h-2 w-2 rounded-full bg-slate-400"></span>
+          Ended goals
+        </h3>
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <article
+          <GoalCard
             v-for="goal in endedGoals"
             :key="goal.id"
-            class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="type-card-title truncate text-slate-900 dark:text-slate-100">{{ goal.title }}</p>
-                <p class="type-caption type-muted mt-1">Ended {{ formatGoalDate(goal.ends_at) }}</p>
-              </div>
-              <button
-                v-if="canDeleteGoal(goal)"
-                class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-300"
-                type="button"
-                @click="$emit('delete-goal', goal.id)"
-              >
-                Delete
-              </button>
-            </div>
-          </article>
+            :goal="goal"
+            ended
+            :can-delete="canDeleteGoal(goal)"
+            @delete="$emit('delete-goal', $event)"
+          />
         </div>
       </div>
     </template>

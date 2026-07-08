@@ -298,7 +298,7 @@ function taskLocation(task, scope = 'full') {
       <div class="dashboard-home-grid pointer-events-none absolute inset-0 opacity-[0.08]"></div>
 
       <div class="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-        <div class="max-w-2xl">
+        <div class="xl:max-w-none">
           <div class="flex flex-wrap items-center gap-2">
             <span class="dashboard-home-pill type-kicker inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-emerald-200">
               <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -311,7 +311,7 @@ function taskLocation(task, scope = 'full') {
               {{ spaceCount }} spaces
             </span>
           </div>
-          <h2 class="type-section-title mt-3 text-white">{{ headerSubtitle }}</h2>
+          <h2 class="type-section-title mt-3 text-white xl:whitespace-nowrap">{{ headerSubtitle }}</h2>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 xl:justify-end">

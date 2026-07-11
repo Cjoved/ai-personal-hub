@@ -59,7 +59,7 @@ const {
 
 const {
   goals,
-  featuredGoal,
+  activeGoals,
   isLoading: isGoalsLoading,
   errorMessage: goalsErrorMessage,
   createGoal,
@@ -101,6 +101,8 @@ const editingTask = ref(null)
 const creatingTask = ref(false)
 const editingGoal = ref(null)
 const creatingGoal = ref(false)
+const highlightedTaskId = ref(null)
+const highlightedTaskTone = ref(null)
 const showSettings = ref(false)
 const showScheduler = ref(false)
 const isSidebarOpen = ref(false)
@@ -118,8 +120,50 @@ async function refreshAssistantData() {
   await fetchGoals()
 }
 
-function handleDashboardEditTask(task) {
-  editingTask.value = task
+function taskLocationLabel(task) {
+  if (task.space?.name && task.list?.name) return `${task.space.name} / ${task.list.name}`
+  return task.list?.name || task.space?.name || 'List'
+}
+
+function handleTodayTaskShortcut({ task, section }) {
+  if (!task) return
+
+  closeSidebar()
+
+  const filterBySection = {
+    overdue: 'overdue',
+    dueToday: 'today',
+    completedToday: 'completed',
+  }
+
+  selectedFilter.value = filterBySection[section] || 'all'
+  activeView.value = 'list'
+
+  if (task.list_id) {
+    selectList(task.list_id)
+  } else if (task.space_id) {
+    selectSpace(task.space_id)
+  } else {
+    toast.error('This task is not assigned to a list yet.')
+    return
+  }
+
+  const toneBySection = {
+    overdue: 'overdue',
+    dueToday: 'due',
+    completedToday: 'done',
+  }
+
+  highlightedTaskId.value = task.id
+  highlightedTaskTone.value = toneBySection[section] || 'done'
+  toast.success(`Opened ${taskLocationLabel(task)}`)
+
+  window.setTimeout(() => {
+    if (highlightedTaskId.value === task.id) {
+      highlightedTaskId.value = null
+      highlightedTaskTone.value = null
+    }
+  }, 6000)
 }
 
 const newTaskTemplate = computed(() => ({
@@ -383,7 +427,7 @@ async function handleDeleteGoal(goalId) {
             :is-dashboard="isDashboard"
             :is-spaces-overview="isSpacesOverview"
             :is-goals-overview="isGoalsOverview"
-            :featured-goal="featuredGoal"
+            :active-goals="activeGoals"
             :is-space-summary="Boolean(activeSpaceId && !activeListId && !isDashboard && !isSpacesOverview && !isGoalsOverview)"
             :active-space="activeSpace"
             :active-list="activeList"
@@ -416,7 +460,7 @@ async function handleDeleteGoal(goalId) {
               :today-tasks="todayDashboardTasks"
               title="Dashboard"
               breakdown-scope="home"
-              @edit-task="handleDashboardEditTask"
+              @go-to-task="handleTodayTaskShortcut"
             />
             <SpacesOverview
               v-else-if="isSpacesOverview"
@@ -455,6 +499,8 @@ async function handleDeleteGoal(goalId) {
                 :title="activeList?.name || 'Tasks'"
                 :is-loading="isTaskLoading"
                 :error-message="taskErrorMessage"
+                :highlighted-task-id="highlightedTaskId"
+                :highlighted-task-tone="highlightedTaskTone"
                 :create-subtask="createSubtask"
                 :update-subtask="updateSubtask"
                 :delete-subtask="handleDeleteSubtask"

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import AppSelect from './AppSelect.vue'
 import { getStatusNeon } from '../composables/statusNeon'
 import { priorityOptions, statusOptions } from '../composables/useTasks'
@@ -33,6 +33,14 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  highlightedTaskId: {
+    type: String,
+    default: null,
+  },
+  highlightedTaskTone: {
+    type: String,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['update-task', 'archive-task', 'restore-task', 'delete-task', 'edit-task'])
@@ -40,6 +48,26 @@ const emit = defineEmits(['update-task', 'archive-task', 'restore-task', 'delete
 const expandedTaskIds = ref(new Set())
 const subtaskDrafts = ref({})
 const savingSubtaskIds = ref(new Set())
+const rowRefs = ref({})
+
+function setRowRef(taskId, element) {
+  if (element) rowRefs.value[taskId] = element
+  else delete rowRefs.value[taskId]
+}
+
+watch(
+  () => props.highlightedTaskId,
+  async (taskId) => {
+    if (!taskId) return
+
+    await nextTick()
+
+    const row = rowRefs.value[taskId]
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  },
+)
 
 const groupTone = {
   inbox: 'border-l-indigo-400',
@@ -239,8 +267,16 @@ function toggleSubtaskDone(subtask, isChecked) {
             <tbody>
               <template v-for="(task, rowIndex) in group.tasks" :key="task.id">
                 <tr
+                  :ref="(element) => setRowRef(task.id, element)"
                   class="task-row transition"
-                  :class="rowIndex % 2 === 1 ? neon(group.value).rowAlt : neon(group.value).row"
+                  :class="[
+                    rowIndex % 2 === 1 ? neon(group.value).rowAlt : neon(group.value).row,
+                    task.id === highlightedTaskId && highlightedTaskTone
+                      ? `task-row--highlighted task-row--highlighted-${highlightedTaskTone}`
+                      : task.id === highlightedTaskId
+                        ? 'task-row--highlighted task-row--highlighted-done'
+                        : '',
+                  ]"
                 >
                   <td class="px-4 py-3.5 align-middle">
                     <div class="flex items-center gap-2">

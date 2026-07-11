@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import GoalMotivationBanner from './GoalMotivationBanner.vue'
+import GoalMotivationStrip from './GoalMotivationStrip.vue'
 import QuickAddTask from './QuickAddTask.vue'
 import TaskFilterMenu from './TaskFilterMenu.vue'
 import ThemeToggle from './ThemeToggle.vue'
@@ -23,9 +23,9 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  featuredGoal: {
-    type: Object,
-    default: null,
+  activeGoals: {
+    type: Array,
+    default: () => [],
   },
   activeSpace: {
     type: Object,
@@ -240,11 +240,10 @@ defineExpose({ focusSearch })
         Schedule
       </button>
 
-      <GoalMotivationBanner
+      <GoalMotivationStrip
         v-if="isDashboard"
-        class="min-w-0 max-w-xl flex-1"
-        :goal="featuredGoal"
-        compact
+        class="min-w-0 flex-1"
+        :goals="activeGoals"
         @go-to-goals="emit('go-to-goals')"
       />
 

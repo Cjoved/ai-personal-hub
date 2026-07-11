@@ -29,7 +29,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['edit-task'])
+const emit = defineEmits(['go-to-task'])
 
 const isHomeScope = computed(() => props.breakdownScope === 'home')
 
@@ -329,7 +329,7 @@ function taskLocation(task, scope = 'full') {
     <TodayTasksPanel
       v-if="isHomeScope && todayTasks"
       :today-tasks="todayTasks"
-      @edit-task="emit('edit-task', $event)"
+      @go-to-task="emit('go-to-task', $event)"
     />
 
     <!-- Space-specific hero -->
@@ -450,37 +450,50 @@ function taskLocation(task, scope = 'full') {
             class="neon-space-progress-card dashboard-feature-space-card flex h-full flex-col rounded-2xl"
             :style="rowColorStyle(space)"
           >
-            <div class="mb-4 flex items-start justify-between gap-3">
-              <div class="flex min-w-0 items-center gap-3">
-                <span
-                  class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-base font-black text-white shadow-md"
-                  :style="{ background: space.color || '#6366f1' }"
-                >
-                  {{ space.name?.slice(0, 1)?.toUpperCase() || 'S' }}
-                </span>
-                <div class="min-w-0">
-                  <strong class="type-card-title block truncate text-slate-900 dark:text-slate-100">{{ space.name }}</strong>
-                  <p class="type-caption type-muted mt-0.5">{{ space.listCount }} lists · {{ space.total }} tasks</p>
-                </div>
+            <div class="dashboard-progress-card-head mb-3">
+              <span
+                class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-sm font-black text-white shadow-md"
+                :style="{ background: space.color || '#6366f1' }"
+              >
+                {{ space.name?.slice(0, 1)?.toUpperCase() || 'S' }}
+              </span>
+              <div class="min-w-0 flex-1">
+                <strong class="dashboard-progress-card-title type-card-title text-slate-900 dark:text-slate-100">{{ space.name }}</strong>
+                <p class="type-caption type-muted mt-1">{{ space.listCount }} lists · {{ space.total }} tasks</p>
               </div>
-              <div class="shrink-0 text-right">
+            </div>
+
+            <div class="dashboard-progress-card-completion">
+              <div>
                 <strong class="type-stat-md text-slate-900 dark:text-slate-100">{{ space.completionRate }}%</strong>
-                <span class="type-badge type-muted">complete</span>
+                <span class="type-badge type-muted ml-1.5">complete</span>
               </div>
+              <span class="type-body-sm type-muted shrink-0 font-semibold">
+                {{ space.total ? `${space.done} / ${space.total} done` : 'No tasks yet' }}
+              </span>
             </div>
 
             <div class="type-body-sm type-muted mb-1.5 flex items-center justify-between gap-2 font-semibold">
               <span>Progress</span>
-              <span>{{ space.done }} / {{ space.total }} done</span>
+              <span v-if="space.total">{{ space.completionRate }}%</span>
             </div>
-            <div class="neon-progress-track h-3.5 overflow-hidden rounded-full" :style="rowColorStyle(space)">
+            <div class="neon-progress-track mb-4 h-3.5 overflow-hidden rounded-full" :style="rowColorStyle(space)">
               <span class="block h-full rounded-full" :style="{ width: `${space.completionRate}%`, background: space.color || '#6366f1' }"></span>
             </div>
 
-            <div class="mt-4 flex flex-wrap items-center gap-2 type-body-sm font-bold">
-              <span class="rounded-lg bg-white/80 px-2.5 py-1 text-slate-600 dark:bg-slate-900/55 dark:text-slate-300">{{ space.open }} open</span>
-              <span class="rounded-lg bg-white/80 px-2.5 py-1 text-emerald-700 dark:bg-slate-900/55 dark:text-emerald-300">{{ space.done }} done</span>
-              <span v-if="space.overdue" class="rounded-lg bg-white/80 px-2.5 py-1 text-rose-600 dark:bg-slate-900/55 dark:text-rose-300">{{ space.overdue }} late</span>
+            <div class="dashboard-progress-card-stats">
+              <div class="dashboard-progress-stat dashboard-progress-stat--open">
+                <span class="dashboard-progress-stat-value">{{ space.open }}</span>
+                <span class="dashboard-progress-stat-label type-muted">Open</span>
+              </div>
+              <div class="dashboard-progress-stat dashboard-progress-stat--done">
+                <span class="dashboard-progress-stat-value">{{ space.done }}</span>
+                <span class="dashboard-progress-stat-label type-muted">Done</span>
+              </div>
+              <div class="dashboard-progress-stat dashboard-progress-stat--late" :class="{ 'is-zero': !space.overdue }">
+                <span class="dashboard-progress-stat-value">{{ space.overdue || 0 }}</span>
+                <span class="dashboard-progress-stat-label type-muted">Late</span>
+              </div>
             </div>
           </div>
         </div>
@@ -517,36 +530,49 @@ function taskLocation(task, scope = 'full') {
             class="neon-space-progress-card dashboard-feature-space-card flex h-full flex-col rounded-2xl"
             :style="spaceThemeStyle"
           >
-            <div class="mb-4 flex items-start justify-between gap-3">
-              <div class="flex min-w-0 items-center gap-3">
-                <span class="dashboard-space-list-dot grid h-14 w-14 shrink-0 place-items-center rounded-2xl">
-                  <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 7h16M4 12h10M4 17h7" />
-                  </svg>
-                </span>
-                <div class="min-w-0">
-                  <strong class="type-card-title block truncate text-slate-900 dark:text-slate-100">{{ list.name }}</strong>
-                  <p class="type-caption type-muted mt-0.5">{{ list.total }} tasks in list</p>
-                </div>
+            <div class="dashboard-progress-card-head mb-3">
+              <span class="dashboard-space-list-dot grid h-12 w-12 shrink-0 place-items-center rounded-2xl">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 7h16M4 12h10M4 17h7" />
+                </svg>
+              </span>
+              <div class="min-w-0 flex-1">
+                <strong class="dashboard-progress-card-title type-card-title text-slate-900 dark:text-slate-100">{{ list.name }}</strong>
+                <p class="type-caption type-muted mt-1">{{ list.total }} tasks in list</p>
               </div>
-              <div class="shrink-0 text-right">
+            </div>
+
+            <div class="dashboard-progress-card-completion">
+              <div>
                 <strong class="type-stat-md text-slate-900 dark:text-slate-100">{{ list.completionRate }}%</strong>
-                <span class="type-badge type-muted">complete</span>
+                <span class="type-badge type-muted ml-1.5">complete</span>
               </div>
+              <span class="type-body-sm type-muted shrink-0 font-semibold">
+                {{ list.total ? `${list.done} / ${list.total} done` : 'No tasks yet' }}
+              </span>
             </div>
 
             <div class="type-body-sm type-muted mb-1.5 flex items-center justify-between gap-2 font-semibold">
               <span>Progress</span>
-              <span>{{ list.done }} / {{ list.total }} done</span>
+              <span v-if="list.total">{{ list.completionRate }}%</span>
             </div>
-            <div class="neon-progress-track h-3.5 overflow-hidden rounded-full" :style="spaceThemeStyle">
+            <div class="neon-progress-track mb-4 h-3.5 overflow-hidden rounded-full" :style="spaceThemeStyle">
               <span class="block h-full rounded-full" :style="{ width: `${list.completionRate}%`, background: spaceAccentColor }"></span>
             </div>
 
-            <div class="mt-4 flex flex-wrap items-center gap-2 type-body-sm font-bold">
-              <span class="rounded-lg bg-white/80 px-2.5 py-1 text-slate-600 dark:bg-slate-900/55 dark:text-slate-300">{{ list.open }} open</span>
-              <span class="rounded-lg bg-white/80 px-2.5 py-1 text-emerald-700 dark:bg-slate-900/55 dark:text-emerald-300">{{ list.done }} done</span>
-              <span v-if="list.overdue" class="rounded-lg bg-white/80 px-2.5 py-1 text-rose-600 dark:bg-slate-900/55 dark:text-rose-300">{{ list.overdue }} late</span>
+            <div class="dashboard-progress-card-stats">
+              <div class="dashboard-progress-stat dashboard-progress-stat--open">
+                <span class="dashboard-progress-stat-value">{{ list.open }}</span>
+                <span class="dashboard-progress-stat-label type-muted">Open</span>
+              </div>
+              <div class="dashboard-progress-stat dashboard-progress-stat--done">
+                <span class="dashboard-progress-stat-value">{{ list.done }}</span>
+                <span class="dashboard-progress-stat-label type-muted">Done</span>
+              </div>
+              <div class="dashboard-progress-stat dashboard-progress-stat--late" :class="{ 'is-zero': !list.overdue }">
+                <span class="dashboard-progress-stat-value">{{ list.overdue || 0 }}</span>
+                <span class="dashboard-progress-stat-label type-muted">Late</span>
+              </div>
             </div>
           </div>
         </div>

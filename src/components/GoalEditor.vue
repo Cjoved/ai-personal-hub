@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import TaskDateTimeSelect from './TaskDateTimeSelect.vue'
 
 const props = defineProps({
   isOpen: {
@@ -18,7 +19,7 @@ const title = ref('')
 const description = ref('')
 const startsAt = ref('')
 const endsAt = ref('')
-const color = ref('#6366f1')
+const color = ref('#10b981')
 
 const colorOptions = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16',
@@ -47,7 +48,7 @@ function resetForm() {
     description.value = props.goal.description || ''
     startsAt.value = toDateInput(props.goal.starts_at)
     endsAt.value = toDateInput(props.goal.ends_at)
-    color.value = props.goal.color || '#6366f1'
+    color.value = props.goal.color || '#10b981'
     return
   }
 
@@ -57,7 +58,7 @@ function resetForm() {
   const defaultEnd = new Date()
   defaultEnd.setMonth(defaultEnd.getMonth() + 1)
   endsAt.value = toDateInput(defaultEnd)
-  color.value = '#6366f1'
+  color.value = '#10b981'
 }
 
 watch(() => props.isOpen, (open) => {
@@ -89,121 +90,104 @@ function handleBackdropClick(event) {
 </script>
 
 <template>
-  <div v-if="isOpen" class="goal-editor-overlay" @click="handleBackdropClick">
-    <div
-      class="goal-editor relative mx-4 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div class="mb-6 flex items-start justify-between">
-        <div>
-          <h2 class="type-section-title text-lg text-slate-900 dark:text-slate-100">
-            {{ goal ? 'Edit Goal' : 'New Goal' }}
-          </h2>
-          <p class="type-body-sm type-muted mt-1">Set a motivational goal with a visible countdown on your dashboard.</p>
-        </div>
-        <button
-          class="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-          type="button"
-          @click="$emit('close')"
-        >
-          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+  <Teleport to="body">
+    <div v-if="isOpen" class="task-editor-backdrop fixed inset-0 z-[260] grid place-items-center px-0 py-0 sm:px-4 sm:py-6" @click="handleBackdropClick">
+      <form
+        class="task-editor-modal task-editor-modal--goal"
+        role="dialog"
+        aria-modal="true"
+        @submit.prevent="handleSave"
+        @click.stop
+      >
+        <div class="task-editor-handle" aria-hidden="true"></div>
+        <div class="task-editor-accent"></div>
 
-      <form class="space-y-5" @submit.prevent="handleSave">
-        <div>
-          <label class="type-label type-muted mb-1.5 block">Goal</label>
-          <input
-            v-model.trim="title"
-            class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            placeholder="e.g. Earn ₱50,000 before December 31"
-            required
-            autofocus
-          />
-        </div>
-
-        <div>
-          <label class="type-label type-muted mb-1.5 block">Why it matters</label>
-          <textarea
-            v-model.trim="description"
-            class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            rows="2"
-            placeholder="Optional motivation note..."
-          />
-        </div>
-
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label class="type-label type-muted mb-1.5 block">Starts</label>
-            <input
-              v-model="startsAt"
-              type="datetime-local"
-              class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
+        <header class="task-editor-header">
+          <div class="min-w-0">
+            <p class="type-label text-emerald-600 dark:text-emerald-400">{{ goal ? 'Goal' : 'New goal' }}</p>
+            <h2 class="type-section-title mt-1 text-slate-950 dark:text-slate-100">
+              {{ goal ? 'Edit goal' : 'Create goal' }}
+            </h2>
+            <p class="task-editor-subtitle">Countdown stays on your dashboard until the timeframe ends.</p>
           </div>
-          <div>
-            <label class="type-label type-muted mb-1.5 block">Ends</label>
-            <input
-              v-model="endsAt"
-              type="datetime-local"
-              class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              required
-            />
-          </div>
-        </div>
-
-        <div>
-          <label class="type-label type-muted mb-1.5 block">Accent color</label>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="c in colorOptions"
-              :key="c"
-              type="button"
-              class="h-8 w-8 rounded-full transition hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2"
-              :class="{ 'ring-2 ring-slate-400 ring-offset-2 dark:ring-slate-300': color === c }"
-              :style="{ background: c }"
-              @click="color = c"
-            ></button>
-          </div>
-        </div>
-
-        <p class="type-caption type-muted rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/60">
-          Active goals stay on your dashboard until the timeframe ends. You can only delete them after that.
-        </p>
-
-        <div class="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="button"
-            class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-            @click="$emit('close')"
-          >
-            Cancel
+          <button class="task-editor-close" type="button" aria-label="Close" @click="emit('close')">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
           </button>
-          <button
-            type="submit"
-            class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
-            :disabled="!isValid"
-          >
-            {{ goal ? 'Update Goal' : 'Create Goal' }}
-          </button>
+        </header>
+
+        <div class="task-editor-body">
+          <section class="task-editor-section">
+            <div class="task-editor-field">
+              <label class="task-editor-label" for="goal-title">Goal</label>
+              <input
+                id="goal-title"
+                v-model.trim="title"
+                class="task-editor-input"
+                placeholder="e.g. Earn ₱50,000 before December 31"
+                required
+                autofocus
+              />
+            </div>
+            <div class="task-editor-field">
+              <label class="task-editor-label" for="goal-description">Why it matters</label>
+              <textarea
+                id="goal-description"
+                v-model.trim="description"
+                class="task-editor-input task-editor-textarea"
+                placeholder="Optional motivation note..."
+              />
+            </div>
+          </section>
+
+          <section class="task-editor-section">
+            <p class="task-editor-section-title">Timeframe</p>
+            <div class="task-editor-grid sm:grid-cols-2">
+              <div class="task-editor-field">
+                <label class="task-editor-label">Starts</label>
+                <TaskDateTimeSelect
+                  v-model="startsAt"
+                  aria-label="Goal start date and time"
+                  placeholder="Start now"
+                />
+              </div>
+              <div class="task-editor-field">
+                <label class="task-editor-label">Ends</label>
+                <TaskDateTimeSelect
+                  v-model="endsAt"
+                  aria-label="Goal end date and time"
+                  placeholder="Pick end date"
+                  :allow-clear="false"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section class="task-editor-section">
+            <p class="task-editor-section-title">Accent color</p>
+            <div class="task-editor-colors">
+              <button
+                v-for="c in colorOptions"
+                :key="c"
+                type="button"
+                class="task-editor-color"
+                :class="{ 'task-editor-color--active': color === c }"
+                :style="{ background: c }"
+                :aria-label="`Color ${c}`"
+                @click="color = c"
+              ></button>
+            </div>
+          </section>
         </div>
+
+        <footer class="task-editor-footer">
+          <button class="task-editor-btn task-editor-btn--ghost" type="button" @click="emit('close')">Cancel</button>
+          <button class="task-editor-btn task-editor-btn--primary" type="submit" :disabled="!isValid">
+            {{ goal ? 'Update goal' : 'Create goal' }}
+          </button>
+        </footer>
       </form>
     </div>
-  </div>
+  </Teleport>
 </template>
-
-<style scoped>
-.goal-editor-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-}
-</style>

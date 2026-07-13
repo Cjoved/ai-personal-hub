@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import GoalMotivationStrip from './GoalMotivationStrip.vue'
 import QuickAddTask from './QuickAddTask.vue'
 import TaskFilterMenu from './TaskFilterMenu.vue'
-import ThemeToggle from './ThemeToggle.vue'
 import ViewTabs from './ViewTabs.vue'
 
 const props = defineProps({
@@ -187,8 +186,6 @@ defineExpose({ focusSearch })
         </div>
 
         <div class="flex items-center gap-2 sm:gap-3">
-          <ThemeToggle />
-
           <span class="toolbar-chip-neon type-body-sm hidden min-w-0 max-w-64 items-center gap-2 truncate rounded-xl border border-slate-200/90 bg-slate-50/80 px-3 py-2 text-slate-600 dark:border-cyan-400/30 dark:bg-indigo-500/10 dark:text-cyan-200 md:flex">
             <span class="type-badge grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 text-white">
               {{ userInitial }}

@@ -18,7 +18,7 @@ const taglineVisible = computed(() => {
   return props.variant === 'full'
 })
 
-const taglineText = computed(() => (props.variant === 'sidebar' ? 'Task workspace' : 'Bot notification'))
+const taglineText = computed(() => (props.variant === 'sidebar' ? 'Tap to switch systems' : 'Bot notification'))
 </script>
 
 <template>

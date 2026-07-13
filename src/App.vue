@@ -8,17 +8,29 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import DashboardCards from './components/DashboardCards.vue'
 import GoalEditor from './components/GoalEditor.vue'
 import GoalsPanel from './components/GoalsPanel.vue'
+import HabitCategoryManager from './components/HabitCategoryManager.vue'
+import HabitEditor from './components/HabitEditor.vue'
+import HabitTrackerView from './components/HabitTrackerView.vue'
+import HabitsSidebar from './components/HabitsSidebar.vue'
+import BudgetCategoryEditor from './components/BudgetCategoryEditor.vue'
+import BudgetTransactionEditor from './components/BudgetTransactionEditor.vue'
+import BudgetTrackerView from './components/BudgetTrackerView.vue'
+import BudgetSidebar from './components/BudgetSidebar.vue'
 import OnboardingBanner from './components/OnboardingBanner.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import SpacesOverview from './components/SpacesOverview.vue'
+import SystemPicker from './components/SystemPicker.vue'
 import TaskAssistant from './components/TaskAssistant.vue'
 import TaskEditor from './components/TaskEditor.vue'
 import TaskList from './components/TaskList.vue'
 import ToastStack from './components/ToastStack.vue'
 import WorkspaceHeader from './components/WorkspaceHeader.vue'
+import { useAppSystem } from './composables/useAppSystem'
 import { useAuth } from './composables/useAuth'
+import { useBudget } from './composables/useBudget'
 import { useConfirm } from './composables/useConfirm'
 import { useGoals } from './composables/useGoals'
+import { useHabits } from './composables/useHabits'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 import { useSettings } from './composables/useSettings'
 import { useTasks } from './composables/useTasks'
@@ -58,6 +70,19 @@ const {
 } = workspace
 
 const {
+  activeSystem,
+  isSystemPickerOpen,
+  habitSection,
+  budgetSection,
+  isTasker,
+  isHabits,
+  isBudget,
+  openSystemPicker,
+  closeSystemPicker,
+  selectSystem,
+} = useAppSystem(user)
+
+const {
   goals,
   activeGoals,
   isLoading: isGoalsLoading,
@@ -67,6 +92,25 @@ const {
   deleteGoal,
   fetchGoals,
 } = useGoals(user)
+
+const habitsApi = useHabits(user)
+const {
+  categories: habitCategories,
+  activeHabits: habitActiveHabits,
+  errorMessage: habitsErrorMessage,
+  createCategory: createHabitCategory,
+  updateCategory: updateHabitCategory,
+  deleteCategory: deleteHabitCategory,
+} = habitsApi
+
+const budgetApi = useBudget(user)
+const {
+  categories: budgetCategories,
+  errorMessage: budgetErrorMessage,
+  createCategory: createBudgetCategory,
+  updateCategory: updateBudgetCategory,
+  deleteCategory: deleteBudgetCategory,
+} = budgetApi
 
 const {
   selectedFilter,
@@ -101,6 +145,13 @@ const editingTask = ref(null)
 const creatingTask = ref(false)
 const editingGoal = ref(null)
 const creatingGoal = ref(false)
+const editingHabit = ref(null)
+const creatingHabit = ref(false)
+const showHabitCategories = ref(false)
+const editingTransaction = ref(null)
+const creatingTransaction = ref(false)
+const showBudgetCategories = ref(false)
+const isTrackerSaving = ref(false)
 const highlightedTaskId = ref(null)
 const highlightedTaskTone = ref(null)
 const showSettings = ref(false)
@@ -200,6 +251,11 @@ useKeyboardShortcuts({
   escape: () => {
     closeTaskEditor()
     closeGoalEditor()
+    closeHabitEditor()
+    closeTransactionEditor()
+    closeSystemPicker()
+    showHabitCategories.value = false
+    showBudgetCategories.value = false
     showSettings.value = false
     isSidebarOpen.value = false
   },
@@ -228,6 +284,46 @@ function openEditGoal(goal) {
 function closeGoalEditor() {
   editingGoal.value = null
   creatingGoal.value = false
+}
+
+function openCreateHabit() {
+  editingHabit.value = null
+  creatingHabit.value = true
+}
+
+function openEditHabit(habit) {
+  editingHabit.value = habit
+  creatingHabit.value = false
+}
+
+function closeHabitEditor() {
+  editingHabit.value = null
+  creatingHabit.value = false
+}
+
+function openHabitCategories() {
+  showHabitCategories.value = true
+}
+
+function openCreateTransaction() {
+  editingTransaction.value = null
+  creatingTransaction.value = true
+}
+
+function openEditTransaction(transaction) {
+  editingTransaction.value = transaction
+  creatingTransaction.value = false
+}
+
+function closeTransactionEditor() {
+  editingTransaction.value = null
+  creatingTransaction.value = false
+}
+
+function handleTrackerToast({ type, message }) {
+  if (!message) return
+  if (type === 'error') toast.error(message)
+  else toast.success(message)
 }
 
 function goToGoals() {
@@ -367,6 +463,112 @@ async function handleDeleteGoal(goalId) {
   if (didDelete) toast.success('Goal deleted')
   else if (goalsErrorMessage.value) toast.error(goalsErrorMessage.value)
 }
+
+async function handleSaveHabit(payload) {
+  isTrackerSaving.value = true
+  if (editingHabit.value?.id) {
+    const ok = await habitsApi.updateHabit(editingHabit.value.id, payload)
+    isTrackerSaving.value = false
+    if (ok) {
+      closeHabitEditor()
+      toast.success('Habit updated')
+      return
+    }
+  } else {
+    const ok = await habitsApi.createHabit(payload)
+    isTrackerSaving.value = false
+    if (ok) {
+      closeHabitEditor()
+      toast.success('Habit created')
+      return
+    }
+  }
+  if (habitsErrorMessage.value) toast.error(habitsErrorMessage.value)
+}
+
+function handleHabitSuggestion(payload) {
+  editingHabit.value = {
+    title: payload.title || '',
+    notes: payload.notes || '',
+    color: payload.color || '#f59e0b',
+    habit_type: payload.habit_type || 'boolean',
+    frequency: payload.frequency || 'daily',
+    target_value: payload.target_value ?? null,
+    unit: payload.unit || null,
+    category_id: null,
+    target_days: null,
+    reminder_time: null,
+    stack_after_habit_id: null,
+    xp_reward: 10,
+  }
+  creatingHabit.value = true
+}
+
+async function handleSaveTransaction(payload) {
+  isTrackerSaving.value = true
+  if (editingTransaction.value?.id) {
+    const ok = await budgetApi.updateTransaction(editingTransaction.value.id, payload)
+    isTrackerSaving.value = false
+    if (ok) {
+      closeTransactionEditor()
+      toast.success('Transaction updated')
+      return
+    }
+  } else {
+    const ok = await budgetApi.createTransaction(payload)
+    isTrackerSaving.value = false
+    if (ok) {
+      closeTransactionEditor()
+      toast.success('Transaction added')
+      return
+    }
+  }
+  if (budgetErrorMessage.value) toast.error(budgetErrorMessage.value)
+}
+
+async function handleCreateHabitCategory(payload) {
+  isTrackerSaving.value = true
+  const ok = await createHabitCategory(payload)
+  isTrackerSaving.value = false
+  if (ok) toast.success('Category added')
+  else if (habitsErrorMessage.value) toast.error(habitsErrorMessage.value)
+}
+
+async function handleUpdateHabitCategory(id, payload) {
+  isTrackerSaving.value = true
+  const ok = await updateHabitCategory(id, payload)
+  isTrackerSaving.value = false
+  if (ok) toast.success('Category updated')
+  else if (habitsErrorMessage.value) toast.error(habitsErrorMessage.value)
+}
+
+async function handleDeleteHabitCategory(id) {
+  const ok = await deleteHabitCategory(id)
+  if (ok) toast.success('Category deleted')
+  else if (habitsErrorMessage.value) toast.error(habitsErrorMessage.value)
+}
+
+async function handleCreateBudgetCategory(payload) {
+  isTrackerSaving.value = true
+  const ok = await createBudgetCategory(payload)
+  isTrackerSaving.value = false
+  if (ok) toast.success('Category added')
+  else if (budgetErrorMessage.value) toast.error(budgetErrorMessage.value)
+}
+
+async function handleUpdateBudgetCategory(id, payload) {
+  isTrackerSaving.value = true
+  const ok = await updateBudgetCategory(id, payload)
+  isTrackerSaving.value = false
+  if (ok) toast.success('Category updated')
+  else if (budgetErrorMessage.value) toast.error(budgetErrorMessage.value)
+}
+
+async function handleDeleteBudgetCategory(id) {
+  const ok = await deleteBudgetCategory(id)
+  if (ok) toast.success('Category deleted')
+  else if (budgetErrorMessage.value) toast.error(budgetErrorMessage.value)
+}
 </script>
 
 <template>
@@ -390,6 +592,7 @@ async function handleDeleteGoal(goalId) {
       ></div>
 
       <AppSidebar
+        v-if="isTasker"
         class="sidebar-shell sidebar-drawer"
         :class="{ 'sidebar-drawer--open': isSidebarOpen }"
         :spaces="spaces"
@@ -408,6 +611,33 @@ async function handleDeleteGoal(goalId) {
         @select-goals="selectGoals(); closeSidebar()"
         @select-space="selectSpace($event); closeSidebar()"
         @select-list="selectList($event); closeSidebar()"
+        @open-system-picker="openSystemPicker"
+        @open-settings="showSettings = true"
+        @sign-out="handleSignOut"
+        @close="closeSidebar"
+      />
+
+      <HabitsSidebar
+        v-else-if="isHabits"
+        class="sidebar-shell sidebar-drawer"
+        :class="{ 'sidebar-drawer--open': isSidebarOpen }"
+        :active-section="habitSection"
+        :user-email="user.email"
+        @select-section="habitSection = $event; closeSidebar()"
+        @open-system-picker="openSystemPicker"
+        @open-settings="showSettings = true"
+        @sign-out="handleSignOut"
+        @close="closeSidebar"
+      />
+
+      <BudgetSidebar
+        v-else
+        class="sidebar-shell sidebar-drawer"
+        :class="{ 'sidebar-drawer--open': isSidebarOpen }"
+        :active-section="budgetSection"
+        :user-email="user.email"
+        @select-section="budgetSection = $event; closeSidebar()"
+        @open-system-picker="openSystemPicker"
         @open-settings="showSettings = true"
         @sign-out="handleSignOut"
         @close="closeSidebar"
@@ -415,6 +645,7 @@ async function handleDeleteGoal(goalId) {
 
       <section class="app-main-bg min-h-screen min-w-0 w-full lg:h-dvh lg:overflow-y-auto">
         <div class="app-content-shell w-full space-y-5 px-3 py-5 sm:px-4 lg:px-5">
+          <template v-if="isTasker">
           <OnboardingBanner :visible="!onboardingComplete" @complete="completeOnboarding" />
 
           <WorkspaceHeader
@@ -523,8 +754,67 @@ async function handleDeleteGoal(goalId) {
               />
             </template>
           </template>
+          </template>
+
+          <template v-else-if="isHabits">
+            <div class="habits-shell space-y-5">
+              <div class="flex items-center gap-2 lg:hidden">
+                <button
+                  class="grid h-10 w-10 place-items-center rounded-xl border border-teal-200/80 bg-white text-teal-800 dark:border-teal-400/30 dark:bg-slate-900 dark:text-teal-200"
+                  type="button"
+                  aria-label="Open navigation"
+                  @click="isSidebarOpen = !isSidebarOpen"
+                >
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                  </svg>
+                </button>
+                <strong class="type-card-title text-slate-950 dark:text-slate-100">Habit Tracker</strong>
+              </div>
+              <HabitTrackerView
+                :api="habitsApi"
+                :section="habitSection"
+                @create-habit="openCreateHabit"
+                @edit-habit="openEditHabit"
+                @create-from-suggestion="handleHabitSuggestion"
+                @manage-categories="openHabitCategories"
+                @toast="handleTrackerToast"
+              />
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="flex items-center gap-2 lg:hidden">
+              <button
+                class="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+                type="button"
+                aria-label="Open navigation"
+                @click="isSidebarOpen = !isSidebarOpen"
+              >
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </button>
+              <strong class="type-card-title">Budget Tracker</strong>
+            </div>
+            <BudgetTrackerView
+              :api="budgetApi"
+              :section="budgetSection"
+              @create-transaction="openCreateTransaction"
+              @edit-transaction="openEditTransaction"
+              @manage-categories="showBudgetCategories = true"
+              @toast="handleTrackerToast"
+            />
+          </template>
         </div>
       </section>
+
+      <SystemPicker
+        :is-open="isSystemPickerOpen"
+        :active-system="activeSystem"
+        @select="selectSystem"
+        @close="closeSystemPicker"
+      />
 
       <TaskEditor
         v-if="editingTask || creatingTask"
@@ -547,6 +837,47 @@ async function handleDeleteGoal(goalId) {
         @close="closeGoalEditor"
       />
 
+      <HabitEditor
+        :is-open="creatingHabit || Boolean(editingHabit)"
+        :habit="editingHabit"
+        :categories="habitCategories"
+        :habits="habitActiveHabits"
+        :is-saving="isTrackerSaving"
+        @save="handleSaveHabit"
+        @close="closeHabitEditor"
+      />
+
+      <HabitCategoryManager
+        :is-open="showHabitCategories"
+        :categories="habitCategories"
+        :is-saving="isTrackerSaving"
+        :error-message="habitsErrorMessage"
+        @create="handleCreateHabitCategory"
+        @update="handleUpdateHabitCategory"
+        @delete="handleDeleteHabitCategory"
+        @close="showHabitCategories = false"
+      />
+
+      <BudgetTransactionEditor
+        :is-open="creatingTransaction || Boolean(editingTransaction)"
+        :transaction="editingTransaction"
+        :categories="budgetCategories"
+        :is-saving="isTrackerSaving"
+        @save="handleSaveTransaction"
+        @close="closeTransactionEditor"
+      />
+
+      <BudgetCategoryEditor
+        :is-open="showBudgetCategories"
+        :categories="budgetCategories"
+        :is-saving="isTrackerSaving"
+        :error-message="budgetErrorMessage"
+        @create="handleCreateBudgetCategory"
+        @update="handleUpdateBudgetCategory"
+        @delete="handleDeleteBudgetCategory"
+        @close="showBudgetCategories = false"
+      />
+
       <SettingsPanel
         v-if="showSettings"
         :settings="settings"
@@ -563,7 +894,7 @@ async function handleDeleteGoal(goalId) {
         @close="showScheduler = false"
       />
 
-      <TaskAssistant :on-data-change="refreshAssistantData" />
+      <TaskAssistant v-if="isTasker" :on-data-change="refreshAssistantData" />
     </div>
 
     <ToastStack />

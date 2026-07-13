@@ -144,6 +144,11 @@ export function useWorkspace(user) {
       return
     }
 
+    if (activePage.value === 'tracker') {
+      activePage.value = 'dashboard'
+      return
+    }
+
     if (activePage.value !== 'dashboard') {
       activePage.value = 'dashboard'
     }

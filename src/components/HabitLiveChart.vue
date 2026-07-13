@@ -35,6 +35,10 @@ const props = defineProps({
     type: Number,
     default: 220,
   },
+  compact: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const uid = `habit-chart-${Math.random().toString(36).slice(2, 9)}`
@@ -151,12 +155,19 @@ watch(
 </script>
 
 <template>
-  <div v-if="!items.length" class="py-8 text-center text-sm text-slate-500">{{ emptyLabel }}</div>
+  <div
+    v-if="!items.length"
+    class="text-center text-sm text-slate-500"
+    :class="compact ? 'flex flex-1 items-center justify-center py-6' : 'py-8'"
+  >
+    {{ emptyLabel }}
+  </div>
 
   <div
     v-else
     ref="rootRef"
     class="habit-live-chart"
+    :class="{ 'habit-live-chart--compact': compact }"
     @mousemove="onMove"
     @mouseleave="onLeave"
     @touchmove.prevent="onMove($event.touches[0])"
@@ -171,6 +182,7 @@ watch(
     <svg
       class="habit-live-chart__svg"
       :viewBox="`0 0 ${width} ${height}`"
+      :preserveAspectRatio="compact ? 'none' : 'xMidYMid meet'"
       role="img"
       :aria-label="`Live chart with ${items.length} points`"
     >
@@ -280,6 +292,6 @@ watch(
       </g>
     </svg>
 
-    <p class="habit-live-chart__hint">Hover or drag across the chart for live values</p>
+    <p v-if="!compact" class="habit-live-chart__hint">Hover or drag across the chart for live values</p>
   </div>
 </template>

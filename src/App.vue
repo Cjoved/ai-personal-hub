@@ -27,7 +27,7 @@ import ToastStack from './components/ToastStack.vue'
 import WorkspaceHeader from './components/WorkspaceHeader.vue'
 import { useAppSystem } from './composables/useAppSystem'
 import { useAuth } from './composables/useAuth'
-import { useBudget } from './composables/useBudget'
+import { useFinance } from './composables/useFinance'
 import { useConfirm } from './composables/useConfirm'
 import { useGoals } from './composables/useGoals'
 import { useHabits } from './composables/useHabits'
@@ -103,7 +103,7 @@ const {
   deleteCategory: deleteHabitCategory,
 } = habitsApi
 
-const budgetApi = useBudget(user)
+const budgetApi = useFinance(user)
 const {
   categories: budgetCategories,
   errorMessage: budgetErrorMessage,
@@ -795,7 +795,7 @@ async function handleDeleteBudgetCategory(id) {
                   <path d="M4 7h16M4 12h16M4 17h16" />
                 </svg>
               </button>
-              <strong class="type-card-title">Budget Tracker</strong>
+              <strong class="type-card-title text-slate-950 dark:text-slate-100">Personal Finance</strong>
             </div>
             <BudgetTrackerView
               :api="budgetApi"
@@ -862,6 +862,7 @@ async function handleDeleteBudgetCategory(id) {
         :is-open="creatingTransaction || Boolean(editingTransaction)"
         :transaction="editingTransaction"
         :categories="budgetCategories"
+        :accounts="budgetApi.activeAccounts.value"
         :is-saving="isTrackerSaving"
         @save="handleSaveTransaction"
         @close="closeTransactionEditor"

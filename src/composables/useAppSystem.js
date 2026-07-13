@@ -17,7 +17,7 @@ export function useAppSystem(user) {
   const activeSystem = ref(readSystem())
   const isSystemPickerOpen = ref(false)
   const habitSection = ref('today')
-  const budgetSection = ref('overview')
+  const budgetSection = ref('dashboard')
 
   const userId = computed(() => user?.value?.id)
 
@@ -27,7 +27,7 @@ export function useAppSystem(user) {
 
   const systemLabel = computed(() => {
     if (isHabits.value) return 'Habit Tracker'
-    if (isBudget.value) return 'Budget Tracker'
+    if (isBudget.value) return 'Personal Finance'
     return 'Personal Tasker'
   })
 
@@ -44,7 +44,7 @@ export function useAppSystem(user) {
     activeSystem.value = system
     isSystemPickerOpen.value = false
     if (system === 'habits') habitSection.value = 'today'
-    if (system === 'budget') budgetSection.value = 'overview'
+    if (system === 'budget') budgetSection.value = 'dashboard'
   }
 
   watch(activeSystem, (value) => {

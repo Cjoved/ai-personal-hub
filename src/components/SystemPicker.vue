@@ -31,9 +31,9 @@ const systems = [
   },
   {
     id: 'budget',
-    title: 'Budget Tracker',
-    subtitle: 'Income, expenses, and category limits',
-    accent: '#22c55e',
+    title: 'Personal Finance',
+    subtitle: 'Cashflow, net worth, and investments',
+    accent: '#1e40af',
     icon: 'budget',
   },
 ]

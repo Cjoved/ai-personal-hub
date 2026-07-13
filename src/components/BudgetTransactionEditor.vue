@@ -1,5 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import FinanceSelect from './FinanceSelect.vue'
+import FinanceMoneyInput from './FinanceMoneyInput.vue'
+import FinanceDateInput from './FinanceDateInput.vue'
 
 const props = defineProps({
   isOpen: {
@@ -36,6 +39,21 @@ const occurredOn = ref('')
 const filteredCategories = computed(() =>
   props.categories.filter((item) => item.kind === type.value),
 )
+
+const categoryOptions = computed(() =>
+  filteredCategories.value.map((category) => ({
+    value: category.id,
+    label: category.name,
+  })),
+)
+
+const accountOptions = computed(() => [
+  { value: '', label: 'No account' },
+  ...props.accounts.map((account) => ({
+    value: account.id,
+    label: account.name,
+  })),
+])
 
 const isValid = computed(() => {
   const value = Number(amount.value)
@@ -134,76 +152,97 @@ watch(type, () => {
         </header>
 
         <div class="finance-modal-body space-y-4">
-          <div class="finance-toggle-group" role="group" aria-label="Transaction type">
-            <button
-              class="finance-toggle finance-toggle--expense"
-              :class="{ 'is-active': type === 'expense' }"
-              type="button"
-              @click="type = 'expense'"
-            >
-              Expense
-            </button>
-            <button
-              class="finance-toggle finance-toggle--income"
-              :class="{ 'is-active': type === 'income' }"
-              type="button"
-              @click="type = 'income'"
-            >
-              Income
-            </button>
-          </div>
+          <section class="finance-modal-section">
+            <div class="finance-modal-section__head">
+              <span class="finance-modal-step">1</span>
+              <div>
+                <h4 class="finance-modal-section__title">Type & amount</h4>
+                <p class="finance-modal-section__hint">Choose expense or income, then enter the amount and date.</p>
+              </div>
+            </div>
 
-          <div class="finance-form-grid finance-form-grid--2">
-            <div class="finance-field">
-              <label class="finance-label" for="tx-amount">Amount</label>
-              <input
-                id="tx-amount"
-                v-model="amount"
-                class="finance-input"
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
-                required
-              />
+            <div class="finance-toggle-group mb-3" role="group" aria-label="Transaction type">
+              <button
+                class="finance-toggle finance-toggle--expense"
+                :class="{ 'is-active': type === 'expense' }"
+                type="button"
+                @click="type = 'expense'"
+              >
+                Expense
+              </button>
+              <button
+                class="finance-toggle finance-toggle--income"
+                :class="{ 'is-active': type === 'income' }"
+                type="button"
+                @click="type = 'income'"
+              >
+                Income
+              </button>
             </div>
-            <div class="finance-field">
-              <label class="finance-label" for="tx-date">Date</label>
-              <input id="tx-date" v-model="occurredOn" class="finance-input" type="date" required />
+
+            <div class="finance-form-grid finance-form-grid--2">
+              <div class="finance-field">
+                <label class="finance-label" for="tx-amount">Amount</label>
+                <FinanceMoneyInput
+                  id="tx-amount"
+                  v-model="amount"
+                  min="0.01"
+                  required
+                />
+              </div>
+              <div class="finance-field">
+                <label class="finance-label" for="tx-date">Date</label>
+                <FinanceDateInput id="tx-date" v-model="occurredOn" required />
+              </div>
             </div>
-            <div class="finance-field">
-              <label class="finance-label" for="tx-category">Category</label>
-              <select id="tx-category" v-model="categoryId" class="finance-input" required>
-                <option disabled value="">Select category</option>
-                <option v-for="category in filteredCategories" :key="category.id" :value="category.id">
-                  {{ category.name }}
-                </option>
-              </select>
+          </section>
+
+          <section class="finance-modal-section">
+            <div class="finance-modal-section__head">
+              <span class="finance-modal-step">2</span>
+              <div>
+                <h4 class="finance-modal-section__title">Classification</h4>
+                <p class="finance-modal-section__hint">Pick where this money belongs.</p>
+              </div>
             </div>
-            <div class="finance-field">
-              <label class="finance-label" for="tx-account">Account</label>
-              <select id="tx-account" v-model="accountId" class="finance-input">
-                <option value="">No account</option>
-                <option v-for="account in accounts" :key="account.id" :value="account.id">
-                  {{ account.name }}
-                </option>
-              </select>
+
+            <div class="finance-form-grid finance-form-grid--2">
+              <div class="finance-field">
+                <label class="finance-label" for="tx-category">Category</label>
+                <FinanceSelect
+                  id="tx-category"
+                  v-model="categoryId"
+                  :options="categoryOptions"
+                  aria-label="Category"
+                  placeholder="Select category"
+                />
+              </div>
+              <div class="finance-field">
+                <label class="finance-label" for="tx-account">Account</label>
+                <FinanceSelect
+                  id="tx-account"
+                  v-model="accountId"
+                  :options="accountOptions"
+                  aria-label="Account"
+                  placeholder="No account"
+                />
+              </div>
+              <div class="finance-field sm:col-span-2">
+                <label class="finance-label" for="tx-note">Note</label>
+                <input
+                  id="tx-note"
+                  v-model="note"
+                  class="finance-input"
+                  maxlength="120"
+                  placeholder="Optional note"
+                />
+              </div>
             </div>
-            <div class="finance-field sm:col-span-2">
-              <label class="finance-label" for="tx-note">Note</label>
-              <input
-                id="tx-note"
-                v-model="note"
-                class="finance-input"
-                maxlength="120"
-                placeholder="Optional note"
-              />
-            </div>
-          </div>
+          </section>
         </div>
 
         <footer class="finance-modal-footer">
-          <button class="finance-ghost-btn" type="button" @click="emit('close')">Cancel</button>
+          <button class="finance-modal-secondary" type="button" @click="emit('close')">Cancel</button>
           <button class="finance-primary-btn disabled:opacity-50" type="submit" :disabled="!isValid || isSaving">
             {{ isSaving ? 'Saving…' : transaction ? 'Save changes' : 'Add transaction' }}
           </button>

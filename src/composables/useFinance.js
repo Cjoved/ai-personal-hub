@@ -1,16 +1,17 @@
 import { computed, ref, watch } from 'vue'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { ASSET_CLASS_COLORS } from '../lib/financeAssetClasses'
 import { formatMoney, monthBounds, monthKeyFromDate, shiftMonthKey } from './useBudget.js'
 
 export { formatMoney, monthBounds, monthKeyFromDate, shiftMonthKey }
 
 const DEFAULT_BUDGET_CATEGORIES = [
-  { name: 'Food', kind: 'expense', color: '#f97316', monthly_limit: 8000 },
-  { name: 'Transport', kind: 'expense', color: '#3b82f6', monthly_limit: 3000 },
-  { name: 'Bills', kind: 'expense', color: '#8b5cf6', monthly_limit: 5000 },
-  { name: 'Shopping', kind: 'expense', color: '#ec4899', monthly_limit: 4000 },
-  { name: 'Salary', kind: 'income', color: '#22c55e', monthly_limit: null },
-  { name: 'Other', kind: 'expense', color: '#64748b', monthly_limit: null },
+  { name: 'Food', kind: 'expense', color: '#f97316', monthly_limit: 8000, icon: 'food' },
+  { name: 'Transport', kind: 'expense', color: '#3b82f6', monthly_limit: 3000, icon: 'transport' },
+  { name: 'Bills', kind: 'expense', color: '#8b5cf6', monthly_limit: 5000, icon: 'bills' },
+  { name: 'Shopping', kind: 'expense', color: '#ec4899', monthly_limit: 4000, icon: 'shopping' },
+  { name: 'Salary', kind: 'income', color: '#22c55e', monthly_limit: null, icon: 'salary' },
+  { name: 'Other', kind: 'expense', color: '#64748b', monthly_limit: null, icon: 'other' },
 ]
 
 const DEFAULT_ACCOUNTS = [
@@ -19,15 +20,6 @@ const DEFAULT_ACCOUNTS = [
   { name: 'GCash', account_type: 'ewallet', opening_balance: 0, color: '#007dfe', position: 2 },
   { name: 'Maya', account_type: 'ewallet', opening_balance: 0, color: '#06b6d4', position: 3 },
 ]
-
-const ASSET_CLASS_COLORS = {
-  stock: '#6366f1',
-  uitf: '#8b5cf6',
-  mutual_fund: '#a855f7',
-  crypto: '#f59e0b',
-  time_deposit: '#14b8a6',
-  other: '#64748b',
-}
 
 function normalizeTransactionType(type) {
   if (type === 'income' || type === 'expense' || type === 'transfer') return type
@@ -521,6 +513,7 @@ export function useFinance(user) {
         name: payload.name.trim(),
         kind: payload.kind === 'income' ? 'income' : 'expense',
         color: payload.color || '#6366f1',
+        icon: payload.icon || 'other',
         monthly_limit: payload.monthly_limit ? Number(payload.monthly_limit) : null,
       })
       .select()
@@ -545,6 +538,7 @@ export function useFinance(user) {
         name: payload.name?.trim(),
         kind: payload.kind === 'income' ? 'income' : 'expense',
         color: payload.color,
+        icon: payload.icon || 'other',
         monthly_limit: payload.monthly_limit ? Number(payload.monthly_limit) : null,
       })
       .eq('id', id)
@@ -803,17 +797,22 @@ export function useFinance(user) {
     if (!userId.value || !id) return false
     errorMessage.value = ''
 
+    const patch = {}
+    if (payload.name != null) patch.name = String(payload.name).trim()
+    if (payload.account_type != null) patch.account_type = payload.account_type
+    if (payload.opening_balance != null && payload.opening_balance !== '') {
+      patch.opening_balance = Number(payload.opening_balance)
+    }
+    if (payload.currency != null) patch.currency = payload.currency
+    if (payload.color != null) patch.color = payload.color
+    if (payload.position != null) patch.position = payload.position
+    if (payload.is_archived != null) patch.is_archived = payload.is_archived
+
+    if (!Object.keys(patch).length) return false
+
     const { data, error } = await supabase
       .from('finance_accounts')
-      .update({
-        name: payload.name?.trim(),
-        account_type: payload.account_type,
-        opening_balance: payload.opening_balance != null ? Number(payload.opening_balance) : undefined,
-        currency: payload.currency,
-        color: payload.color,
-        position: payload.position,
-        is_archived: payload.is_archived,
-      })
+      .update(patch)
       .eq('id', id)
       .eq('user_id', userId.value)
       .select()

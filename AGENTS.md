@@ -1,3 +1,8 @@
+---
+description: 
+alwaysApply: true
+---
+
 # Project Instructions
 
 ## App Purpose

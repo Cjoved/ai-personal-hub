@@ -74,6 +74,9 @@ const {
   isSystemPickerOpen,
   habitSection,
   budgetSection,
+  financeActivityTab,
+  financeBudgetTab,
+  financeNetworthTab,
   isTasker,
   isHabits,
   isBudget,
@@ -583,7 +586,11 @@ async function handleDeleteBudgetCategory(id) {
       <AuthForm />
     </div>
 
-    <div v-else class="app-shell min-h-screen lg:grid lg:h-dvh lg:grid-cols-[18rem_1fr] lg:overflow-hidden">
+    <div
+      v-else
+      class="app-shell min-h-screen lg:grid lg:h-dvh lg:grid-cols-[18rem_1fr] lg:overflow-hidden"
+      :data-system="activeSystem"
+    >
       <div
         v-if="isSidebarOpen"
         class="sidebar-backdrop lg:hidden"
@@ -800,6 +807,9 @@ async function handleDeleteBudgetCategory(id) {
             <BudgetTrackerView
               :api="budgetApi"
               :section="budgetSection"
+              v-model:activity-tab="financeActivityTab"
+              v-model:budget-tab="financeBudgetTab"
+              v-model:networth-tab="financeNetworthTab"
               @create-transaction="openCreateTransaction"
               @edit-transaction="openEditTransaction"
               @manage-categories="showBudgetCategories = true"

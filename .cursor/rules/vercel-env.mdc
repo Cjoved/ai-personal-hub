@@ -1,6 +1,6 @@
 ---
-description: Vercel and Vite environment variable safety rules
-globs: **/{.env*,vercel.json,*.js,*.vue}
+description: 
+globs: **/{.env*, vercel.json, *.js, *.vue}
 alwaysApply: false
 ---
 

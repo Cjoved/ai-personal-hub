@@ -38,7 +38,7 @@ const navItems = [
 
 function navClass(isActive) {
   return isActive
-    ? 'bg-white/10 text-white shadow-[inset_3px_0_0_0_rgb(13,148,136)] ring-1 ring-teal-400/25'
+    ? 'system-nav-item--active'
     : 'text-slate-300 hover:bg-white/5 hover:text-white'
 }
 </script>

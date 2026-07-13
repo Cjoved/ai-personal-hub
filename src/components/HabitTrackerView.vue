@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, toRef, watch } from 'vue'
 import HabitAiPanel from './HabitAiPanel.vue'
-import HabitLiveChart from './HabitLiveChart.vue'
+import LiveTrendChart from './LiveTrendChart.vue'
 import { formatReminderTime, frequencyLabel } from '../composables/useHabits'
 import { useHabitNotifications } from '../composables/useHabitNotifications'
 import { supabase } from '../lib/supabase'
@@ -674,7 +674,7 @@ watch(
               <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Weekly completion</h3>
               <p class="text-xs text-slate-500">Live trend across the last 8 weeks</p>
             </div>
-            <HabitLiveChart
+            <LiveTrendChart
               type="line"
               :items="historySeries"
               value-suffix="%"
@@ -687,7 +687,7 @@ watch(
               <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Monthly trends</h3>
               <p class="text-xs text-slate-500">Live completion rate by month</p>
             </div>
-            <HabitLiveChart
+            <LiveTrendChart
               type="bar"
               :items="monthlySeries"
               value-suffix="%"
@@ -702,7 +702,7 @@ watch(
             <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Mood vs weekday</h3>
             <p class="text-xs text-slate-500">Average mood from check-in journals</p>
           </div>
-          <HabitLiveChart
+          <LiveTrendChart
             type="bar"
             :items="moodChartItems"
             value-key="value"

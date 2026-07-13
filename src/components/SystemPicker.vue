@@ -1,5 +1,6 @@
 <script setup>
 import AppLogo from './AppLogo.vue'
+import { SYSTEM_THEMES } from '../lib/systemTheme'
 
 defineProps({
   isOpen: {
@@ -19,21 +20,21 @@ const systems = [
     id: 'tasker',
     title: 'Personal Tasker',
     subtitle: 'Dashboard, goals, spaces, and tasks',
-    accent: '#8b5cf6',
+    accent: SYSTEM_THEMES.tasker.accent,
     icon: 'tasker',
   },
   {
     id: 'habits',
     title: 'Habit Tracker',
     subtitle: 'Daily check-ins, streaks, and routines',
-    accent: '#f59e0b',
+    accent: SYSTEM_THEMES.habits.accent,
     icon: 'habits',
   },
   {
     id: 'budget',
     title: 'Personal Finance',
     subtitle: 'Cashflow, net worth, and investments',
-    accent: '#1e40af',
+    accent: SYSTEM_THEMES.budget.accent,
     icon: 'budget',
   },
 ]
@@ -91,7 +92,11 @@ const systems = [
           </span>
           <strong class="mt-3 block text-base font-bold text-white">{{ system.title }}</strong>
           <p class="mt-1 text-sm text-slate-400">{{ system.subtitle }}</p>
-          <span v-if="activeSystem === system.id" class="mt-3 inline-flex rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+          <span
+            v-if="activeSystem === system.id"
+            class="mt-3 inline-flex rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+            :style="{ color: system.accent }"
+          >
             Current
           </span>
         </button>

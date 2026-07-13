@@ -113,7 +113,7 @@ async function removeList(listId) {
 
 function navItemClass(isActive) {
   return isActive
-    ? 'bg-white/10 text-white shadow-[inset_3px_0_0_0_rgb(52,211,153)] ring-1 ring-white/10'
+    ? 'system-nav-item--active'
     : 'text-slate-300 hover:bg-white/5 hover:text-white'
 }
 
@@ -267,7 +267,7 @@ watch(
                     class="type-body-sm flex min-w-0 flex-1 items-center gap-2 truncate rounded-lg px-2 py-1.5 text-left transition"
                     :class="
                       activeListId === list.id
-                        ? 'bg-white/10 font-semibold text-white shadow-[inset_2px_0_0_0_rgb(52,211,153)]'
+                        ? 'system-nav-item--active font-semibold'
                         : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                     "
                     type="button"

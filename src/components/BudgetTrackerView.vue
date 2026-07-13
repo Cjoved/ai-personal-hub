@@ -2,8 +2,14 @@
 import { computed, ref, toRefs, watch } from 'vue'
 import DashboardBarChart from './DashboardBarChart.vue'
 import DashboardDonutChart from './DashboardDonutChart.vue'
-import HabitLiveChart from './HabitLiveChart.vue'
+import LiveTrendChart from './LiveTrendChart.vue'
 import FinanceAiPanel from './FinanceAiPanel.vue'
+import FinanceSelect from './FinanceSelect.vue'
+import FinanceCategoryIcon from './FinanceCategoryIcon.vue'
+import FinanceMoneyInput from './FinanceMoneyInput.vue'
+import FinanceDateInput from './FinanceDateInput.vue'
+import FinanceHoldingIcon from './FinanceHoldingIcon.vue'
+import { FINANCE_ASSET_CLASSES, assetClassLabel } from '../lib/financeAssetClasses'
 import { formatMoney, shiftMonthKey } from '../composables/useFinance'
 
 const props = defineProps({
@@ -20,9 +26,9 @@ const props = defineProps({
 const emit = defineEmits(['create-transaction', 'edit-transaction', 'manage-categories', 'toast'])
 
 const openModal = ref(null)
-const activityTab = ref('transactions')
-const budgetTab = ref('limits')
-const networthTab = ref('investments')
+const activityTab = defineModel('activityTab', { type: String, default: 'transactions' })
+const budgetTab = defineModel('budgetTab', { type: String, default: 'limits' })
+const networthTab = defineModel('networthTab', { type: String, default: 'investments' })
 
 function syncTabsFromSection(section) {
   if (section === 'accounts') activityTab.value = 'accounts'
@@ -66,6 +72,8 @@ const showGoals = computed(() => resolvedSection.value === 'goals')
 
 function closeModal() {
   openModal.value = null
+  editingAccountId.value = null
+  accountForm.value = { name: '', account_type: 'cash', opening_balance: '' }
 }
 
 const {
@@ -104,8 +112,22 @@ const {
 const debtMethod = ref('snowball')
 const subscriptionsOnly = ref(true)
 const isBusy = ref(false)
+const goalAmountDrafts = ref({})
+
+watch(
+  goals,
+  (list) => {
+    const next = { ...goalAmountDrafts.value }
+    for (const goal of list || []) {
+      if (next[goal.id] == null) next[goal.id] = String(goal.current_amount ?? 0)
+    }
+    goalAmountDrafts.value = next
+  },
+  { immediate: true, deep: true },
+)
 
 const accountForm = ref({ name: '', account_type: 'cash', opening_balance: '' })
+const editingAccountId = ref(null)
 const transferForm = ref({
   from_account_id: '',
   to_account_id: '',
@@ -130,6 +152,72 @@ const goalForm = ref({ name: '', target_amount: '', current_amount: '0', due_on:
 const liabilityForm = ref({ name: '', balance: '', apr: '', min_payment: '' })
 const paydownForm = ref({ id: '', amount: '' })
 
+const accountTypeOptions = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'bank', label: 'Bank' },
+  { value: 'ewallet', label: 'E-wallet' },
+  { value: 'other', label: 'Other' },
+]
+
+const recurringTypeOptions = [
+  { value: 'expense', label: 'Expense' },
+  { value: 'income', label: 'Income' },
+]
+
+const cadenceOptions = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+]
+
+const assetClassOptions = FINANCE_ASSET_CLASSES
+
+const accountSelectOptions = computed(() =>
+  (activeAccounts.value || []).map((account) => ({
+    value: account.id,
+    label: account.name,
+  })),
+)
+
+const accountSelectOptionsWithNone = computed(() => [
+  { value: '', label: 'None' },
+  ...accountSelectOptions.value,
+])
+
+const accountSelectOptionsWithPlaceholder = computed(() => [
+  { value: '', label: 'Select account' },
+  ...accountSelectOptions.value,
+])
+
+const recurringCategoryOptions = computed(() => {
+  const list =
+    recurringForm.value.type === 'income' ? incomeCategories.value : expenseCategories.value
+  return [
+    { value: '', label: 'None' },
+    ...(list || []).map((category) => ({
+      value: category.id,
+      label: category.name,
+    })),
+  ]
+})
+
+const holdingSelectOptions = computed(() => [
+  { value: '', label: 'Select holding' },
+  ...(holdings.value || []).map((holding) => ({
+    value: holding.id,
+    label: holding.name,
+  })),
+])
+
+const liabilitySelectOptions = computed(() => [
+  { value: '', label: 'Select debt' },
+  ...(liabilities.value || []).map((row) => ({
+    value: row.id,
+    label: row.name,
+  })),
+])
+
 const monthLabel = computed(() => {
   const [year, month] = String(selectedMonth.value).split('-').map(Number)
   return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(
@@ -138,11 +226,20 @@ const monthLabel = computed(() => {
 })
 
 const netWorthChartItems = computed(() =>
-  (netWorthTrend.value || []).map((point) => ({
-    label: point.label,
-    value: point.netWorth,
-    sublabel: `Cash ${formatMoney(point.cashAssets)} · Invest ${formatMoney(point.investValue)}`,
-  })),
+  (netWorthTrend.value || []).map((point) => {
+    const [year, month] = String(point.monthKey || point.label).split('-').map(Number)
+    const label =
+      year && month
+        ? new Intl.DateTimeFormat(undefined, { month: 'short', year: '2-digit' }).format(
+            new Date(year, month - 1, 1),
+          )
+        : point.label
+    return {
+      label,
+      value: point.netWorth,
+      sublabel: `Cash ${formatMoney(point.cashAssets)} · Invest ${formatMoney(point.investValue)}`,
+    }
+  }),
 )
 
 const allocationTotal = computed(() =>
@@ -179,12 +276,22 @@ const subscriptionRows = computed(() => {
 
 const debtPlanRows = computed(() => props.api.debtPlan(debtMethod.value))
 
+const recentTransactions = computed(() => (monthTransactions.value || []).slice(0, 6))
+
 const filtersActive = computed(
   () =>
     filterType.value !== 'all' ||
     filterCategoryId.value !== 'all' ||
     Boolean(filterSearch.value?.trim()),
 )
+
+const categoryFilterOptions = computed(() => [
+  { value: 'all', label: 'All categories' },
+  ...(categories.value || []).map((category) => ({
+    value: category.id,
+    label: category.name,
+  })),
+])
 
 function clearFilters() {
   filterType.value = 'all'
@@ -204,6 +311,13 @@ function categoryName(id) {
 
 function accountName(id) {
   return id ? props.api.accountById(id)?.name || 'Account' : '—'
+}
+
+function accountTypeLabel(type) {
+  if (type === 'cash') return 'Cash'
+  if (type === 'bank') return 'Bank'
+  if (type === 'ewallet') return 'E-wallet'
+  return 'Other'
 }
 
 function progressTone(row) {
@@ -236,20 +350,43 @@ async function onExportCsv() {
 async function onCreateAccount() {
   if (isBusy.value || !accountForm.value.name.trim()) return
   isBusy.value = true
-  const ok = await props.api.createAccount({
+
+  const payload = {
     name: accountForm.value.name,
     account_type: accountForm.value.account_type,
     opening_balance: accountForm.value.opening_balance,
-  })
+  }
+
+  const ok = editingAccountId.value
+    ? await props.api.updateAccount(editingAccountId.value, payload)
+    : await props.api.createAccount(payload)
+
   emit('toast', {
     type: ok ? 'success' : 'error',
-    message: ok ? 'Account added' : props.api.errorMessage.value || 'Could not add account.',
+    message: ok
+      ? editingAccountId.value
+        ? 'Account updated'
+        : 'Account added'
+      : props.api.errorMessage.value || (editingAccountId.value ? 'Could not update account.' : 'Could not add account.'),
   })
-  if (ok) {
-    accountForm.value = { name: '', account_type: 'cash', opening_balance: '' }
-    openModal.value = null
-  }
+  if (ok) closeModal()
   isBusy.value = false
+}
+
+function openCreateAccount() {
+  editingAccountId.value = null
+  accountForm.value = { name: '', account_type: 'cash', opening_balance: '' }
+  openModal.value = 'account'
+}
+
+function openEditAccount(account) {
+  editingAccountId.value = account.id
+  accountForm.value = {
+    name: account.name || '',
+    account_type: account.account_type || 'other',
+    opening_balance: String(account.opening_balance ?? 0),
+  }
+  openModal.value = 'account'
 }
 
 async function onArchiveAccount(account) {
@@ -412,15 +549,26 @@ async function onCreateGoal() {
   isBusy.value = false
 }
 
-async function onUpdateGoalAmount(goal, amount) {
+async function onUpdateGoalAmount(goal) {
   if (isBusy.value) return
   isBusy.value = true
+  const amount = goalAmountDrafts.value[goal.id]
   const ok = await props.api.updateGoal(goal.id, { current_amount: amount })
   emit('toast', {
     type: ok ? 'success' : 'error',
     message: ok ? 'Goal progress updated' : props.api.errorMessage.value || 'Could not update goal.',
   })
   isBusy.value = false
+}
+
+function goalProgressPct(goal) {
+  const target = Number(goal.target_amount) || 1
+  const current = Number(goal.current_amount) || 0
+  return Math.min(100, Math.round((current / target) * 100))
+}
+
+function goalRemaining(goal) {
+  return Math.max(0, (Number(goal.target_amount) || 0) - (Number(goal.current_amount) || 0))
 }
 
 async function onCreateLiability() {
@@ -531,40 +679,40 @@ async function onCreateFromProposal(proposal) {
               </button>
             </div>
           </div>
-
-          <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <div>
-              <p class="finance-label">Net worth</p>
-              <p class="mt-1 text-3xl font-black tabular-nums" :class="gainClass(netWorth)">
-                {{ formatMoney(netWorth) }}
-              </p>
-            </div>
-            <div>
-              <p class="finance-label">Cash &amp; wallets</p>
-              <p class="mt-1 text-xl font-bold tabular-nums text-blue-700 dark:text-blue-300">
-                {{ formatMoney(cashAssets) }}
-              </p>
-            </div>
-            <div>
-              <p class="finance-label">Investments</p>
-              <p class="mt-1 text-xl font-bold tabular-nums text-blue-700 dark:text-blue-300">
-                {{ formatMoney(investValue) }}
-              </p>
-            </div>
-            <div>
-              <p class="finance-label">Liabilities</p>
-              <p class="mt-1 text-xl font-bold tabular-nums text-rose-600 dark:text-rose-300">
-                {{ formatMoney(liabilitiesTotal) }}
-              </p>
-            </div>
-            <div>
-              <p class="finance-label">Unrealized gain</p>
-              <p class="mt-1 text-xl font-bold tabular-nums" :class="gainClass(unrealizedGain)">
-                {{ formatMoney(unrealizedGain) }}
-              </p>
-            </div>
-          </div>
         </section>
+
+        <div class="finance-wealth-strip">
+          <div>
+            <p class="finance-label">Net worth</p>
+            <p class="mt-1 text-2xl font-black tabular-nums" :class="gainClass(netWorth)">
+              {{ formatMoney(netWorth) }}
+            </p>
+          </div>
+          <div>
+            <p class="finance-label">Cash &amp; wallets</p>
+            <p class="mt-1 text-lg font-bold tabular-nums text-blue-700 dark:text-blue-300">
+              {{ formatMoney(cashAssets) }}
+            </p>
+          </div>
+          <div>
+            <p class="finance-label">Investments</p>
+            <p class="mt-1 text-lg font-bold tabular-nums text-blue-700 dark:text-blue-300">
+              {{ formatMoney(investValue) }}
+            </p>
+          </div>
+          <div>
+            <p class="finance-label">Liabilities</p>
+            <p class="mt-1 text-lg font-bold tabular-nums text-rose-600 dark:text-rose-300">
+              {{ formatMoney(liabilitiesTotal) }}
+            </p>
+          </div>
+          <div>
+            <p class="finance-label">Unrealized gain</p>
+            <p class="mt-1 text-lg font-bold tabular-nums" :class="gainClass(unrealizedGain)">
+              {{ formatMoney(unrealizedGain) }}
+            </p>
+          </div>
+        </div>
 
         <div class="grid gap-3 sm:grid-cols-3">
           <article class="finance-stat-card finance-stat-card--gain">
@@ -604,53 +752,164 @@ async function onCreateFromProposal(proposal) {
         </div>
 
         <div class="finance-dash-charts">
-          <article class="finance-panel finance-dash-trend">
-            <div class="mb-3 flex items-end justify-between gap-3">
-              <h3 class="type-card-title">Net worth trend</h3>
-              <p class="type-caption type-muted hidden sm:block">Last 6 months</p>
-            </div>
-            <HabitLiveChart
-              :items="netWorthChartItems"
-              type="line"
-              :height="168"
-              compact
-              value-suffix=""
-              color="#1e40af"
-              empty-label="Not enough history yet."
-            />
-          </article>
+          <div class="finance-dash-col finance-dash-col--main">
+            <article class="finance-panel finance-dash-trend">
+              <div class="mb-2 flex items-end justify-between gap-3">
+                <h3 class="type-card-title">Net worth trend</h3>
+                <p class="type-caption type-muted hidden sm:block">Last 6 months</p>
+              </div>
+              <LiveTrendChart
+                :items="netWorthChartItems"
+                type="line"
+                :height="240"
+                compact
+                value-suffix=""
+                color="#1e40af"
+                empty-label="Not enough history yet."
+              />
+            </article>
+          </div>
 
-          <article class="finance-panel finance-dash-donut">
-            <h3 class="type-card-title mb-3">Spend by category</h3>
-            <DashboardDonutChart
-              :segments="spendDonutSegments"
-              size="lg"
-              layout="stack"
-              center-label="Spent"
-              empty-label="No expenses this month."
-            />
-            <table v-if="spendDonutTableRows.length" class="sr-only">
-              <caption>Spend by category percentages</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Category</th>
-                  <th scope="col">Amount</th>
-                  <th scope="col">Share</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in spendDonutTableRows" :key="row.label">
-                  <td>{{ row.label }}</td>
-                  <td>{{ formatMoney(row.value) }}</td>
-                  <td>{{ row.pct }}%</td>
-                </tr>
-              </tbody>
-            </table>
-          </article>
+          <div class="finance-dash-col finance-dash-col--side">
+            <article class="finance-panel finance-dash-donut">
+              <h3 class="type-card-title mb-3">Spend by category</h3>
+              <DashboardDonutChart
+                :segments="spendDonutSegments"
+                size="lg"
+                layout="stack"
+                center-label="Spent"
+                empty-label="No expenses this month."
+              />
+              <table v-if="spendDonutTableRows.length" class="sr-only">
+                <caption>Spend by category percentages</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Category</th>
+                    <th scope="col">Amount</th>
+                    <th scope="col">Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in spendDonutTableRows" :key="row.label">
+                    <td>{{ row.label }}</td>
+                    <td>{{ formatMoney(row.value) }}</td>
+                    <td>{{ row.pct }}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </article>
 
+            <article class="finance-panel finance-dash-alloc">
+              <h3 class="type-card-title mb-3">Asset allocation</h3>
+              <DashboardDonutChart
+                :segments="allocationSegments"
+                size="lg"
+                layout="stack"
+                center-label="Assets"
+                empty-label="No assets tracked yet."
+              />
+              <table v-if="allocationTableRows.length" class="sr-only">
+                <caption>Asset allocation percentages</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Asset</th>
+                    <th scope="col">Value</th>
+                    <th scope="col">Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in allocationTableRows" :key="row.label">
+                    <td>{{ row.label }}</td>
+                    <td>{{ formatMoney(row.value) }}</td>
+                    <td>{{ row.pct }}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </article>
+          </div>
+        </div>
+
+        <div class="finance-dash-bottom">
           <article class="finance-panel finance-dash-bars">
-            <h3 class="type-card-title mb-3">Income vs expense</h3>
-            <DashboardBarChart :items="incomeExpenseBars" empty-label="No transactions this month." />
+            <h3 class="type-card-title">Income vs expense</h3>
+            <div v-if="!incomeExpenseBars.length" class="type-body-sm type-muted">
+              No transactions this month.
+            </div>
+            <div v-else class="finance-cashflow-compare">
+              <div
+                v-for="item in incomeExpenseBars"
+                :key="item.label"
+                class="finance-cashflow-compare__row"
+              >
+                <div class="finance-cashflow-compare__meta">
+                  <span class="finance-cashflow-compare__label">{{ item.label }}</span>
+                  <span
+                    class="finance-cashflow-compare__value tabular-nums"
+                    :class="
+                      item.label === 'Expense'
+                        ? 'text-rose-600 dark:text-rose-300'
+                        : 'text-emerald-600 dark:text-emerald-300'
+                    "
+                  >
+                    {{ formatMoney(item.value) }}
+                  </span>
+                </div>
+                <div class="dashboard-bar-track overflow-hidden">
+                  <span
+                    class="dashboard-bar-fill block h-full rounded-full"
+                    :style="{
+                      width: `${Math.max(
+                        ((Number(item.value) || 0) /
+                          Math.max(...incomeExpenseBars.map((row) => Number(row.value) || 0), 1)) *
+                          100,
+                        item.value ? 6 : 0,
+                      )}%`,
+                      background: `linear-gradient(90deg, ${item.color || '#1e40af'}, color-mix(in srgb, ${item.color || '#1e40af'} 70%, white))`,
+                    }"
+                  />
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="finance-panel finance-dash-recent">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 class="type-card-title">Recent activity</h3>
+              <button
+                class="finance-ghost-btn !min-h-0 px-3 py-1.5 text-xs"
+                type="button"
+                @click="emit('create-transaction')"
+              >
+                Add transaction
+              </button>
+            </div>
+            <div v-if="!recentTransactions.length" class="finance-dash-recent-empty">
+              <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">No transactions this month</p>
+              <p class="type-caption type-muted mt-1">Add income or expenses to fill this space with live activity.</p>
+            </div>
+            <ul v-else class="finance-dash-recent-list">
+              <li
+                v-for="row in recentTransactions"
+                :key="row.id"
+                class="finance-row !p-3 flex items-center justify-between gap-3"
+              >
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {{ row.type === 'transfer' ? (row.note || 'Transfer') : categoryName(row.category_id) }}
+                  </p>
+                  <p class="type-caption type-muted">
+                    {{ row.occurred_on }}
+                    <span v-if="row.account_id"> · {{ accountName(row.account_id) }}</span>
+                  </p>
+                </div>
+                <strong
+                  class="shrink-0 tabular-nums text-sm"
+                  :class="row.type === 'income' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'"
+                >
+                  {{ row.type === 'income' ? '+' : '-' }}{{ formatMoney(row.amount) }}
+                </strong>
+              </li>
+            </ul>
           </article>
         </div>
       </template>
@@ -712,7 +971,7 @@ async function onCreateFromProposal(proposal) {
                 </button>
               </template>
               <template v-else>
-                <button class="finance-primary-btn" type="button" @click="openModal = 'account'">
+                <button class="finance-primary-btn" type="button" @click="openCreateAccount">
                   Add account
                 </button>
                 <button
@@ -822,17 +1081,14 @@ async function onCreateFromProposal(proposal) {
 
             <div class="flex flex-wrap items-center gap-2">
               <label class="sr-only" for="finance-tx-category">Category</label>
-              <select
+              <FinanceSelect
                 id="finance-tx-category"
                 v-model="filterCategoryId"
-                class="finance-filter-select"
+                size="filter"
+                :options="categoryFilterOptions"
                 aria-label="Filter by category"
-              >
-                <option value="all">All categories</option>
-                <option v-for="category in categories" :key="category.id" :value="category.id">
-                  {{ category.name }}
-                </option>
-              </select>
+                placeholder="All categories"
+              />
               <button
                 v-if="filtersActive"
                 class="finance-chip"
@@ -845,76 +1101,89 @@ async function onCreateFromProposal(proposal) {
           </div>
         </article>
 
-        <div v-if="!monthTransactions.length" class="finance-empty">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="mx-auto mb-3 h-10 w-10 opacity-30"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="1.5"
-              aria-hidden="true"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <p class="font-semibold">No transactions for {{ monthLabel }}</p>
-            <p class="type-caption type-muted mt-1">Add your first income or expense to get started.</p>
-            <button class="finance-primary-btn mt-3" type="button" @click="emit('create-transaction')">
-              Add transaction
-            </button>
+          <div class="finance-tx-table-wrap">
+            <table class="finance-tx-table">
+              <caption class="sr-only">Transactions for {{ monthLabel }}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">Account</th>
+                  <th scope="col">Note</th>
+                  <th scope="col" class="finance-tx-table__amount">Amount</th>
+                  <th scope="col" class="finance-tx-table__actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!monthTransactions.length">
+                  <td colspan="7" class="finance-tx-table__empty">
+                    <p class="font-semibold text-slate-800 dark:text-slate-100">No transactions for {{ monthLabel }}</p>
+                    <p class="type-caption type-muted mt-1">Add your first income or expense to get started.</p>
+                    <button class="finance-primary-btn mt-3" type="button" @click="emit('create-transaction')">
+                      Add transaction
+                    </button>
+                  </td>
+                </tr>
+                <tr v-for="row in monthTransactions" :key="row.id">
+                  <td class="finance-tx-table__date">{{ row.occurred_on }}</td>
+                  <td>
+                    <span
+                      class="finance-tx-type"
+                      :class="{
+                        'finance-tx-type--income': row.type === 'income',
+                        'finance-tx-type--expense': row.type === 'expense',
+                        'finance-tx-type--transfer': row.type === 'transfer',
+                      }"
+                    >
+                      {{ row.type === 'income' ? 'Income' : row.type === 'transfer' ? 'Transfer' : 'Expense' }}
+                    </span>
+                  </td>
+                  <td class="finance-tx-table__category">
+                    {{ row.type === 'transfer' ? 'Transfer' : categoryName(row.category_id) }}
+                  </td>
+                  <td>{{ row.account_id ? accountName(row.account_id) : '—' }}</td>
+                  <td class="finance-tx-table__note">
+                    <span :title="row.note || undefined">{{ row.note?.trim() ? row.note : '—' }}</span>
+                  </td>
+                  <td
+                    class="finance-tx-table__amount"
+                    :class="row.type === 'income' ? 'finance-tx-table__amount--in' : 'finance-tx-table__amount--out'"
+                  >
+                    {{ row.type === 'income' ? '+' : '−' }}{{ formatMoney(row.amount) }}
+                  </td>
+                  <td class="finance-tx-table__actions">
+                    <button
+                      class="finance-action-btn"
+                      type="button"
+                      aria-label="Edit transaction"
+                      title="Edit"
+                      @click="emit('edit-transaction', row)"
+                    >
+                      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    </button>
+                    <button
+                      class="finance-action-btn finance-action-btn--danger"
+                      type="button"
+                      aria-label="Delete transaction"
+                      title="Delete"
+                      :disabled="isBusy"
+                      @click="onDeleteTransaction(row)"
+                    >
+                      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <ul v-else class="space-y-3">
-            <li
-              v-for="row in monthTransactions"
-              :key="row.id"
-              class="finance-row flex flex-wrap items-center justify-between gap-3"
-            >
-              <div class="min-w-0">
-                <p class="font-semibold text-slate-900 dark:text-slate-100">
-                  {{ row.type === 'transfer' ? (row.note || 'Transfer') : categoryName(row.category_id) }}
-                </p>
-                <p class="finance-label">
-                  {{ row.occurred_on }}
-                  <span v-if="row.account_id"> · {{ accountName(row.account_id) }}</span>
-                  <span v-if="row.note && row.type !== 'transfer'"> · {{ row.note }}</span>
-                </p>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <strong
-                  class="mr-1 tabular-nums"
-                  :class="row.type === 'income' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'"
-                >
-                  {{ row.type === 'income' ? '+' : '-' }}{{ formatMoney(row.amount) }}
-                </strong>
-                <button
-                  class="finance-action-btn"
-                  type="button"
-                  aria-label="Edit transaction"
-                  title="Edit"
-                  @click="emit('edit-transaction', row)"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
-                </button>
-                <button
-                  class="finance-action-btn finance-action-btn--danger"
-                  type="button"
-                  aria-label="Delete transaction"
-                  title="Delete"
-                  :disabled="isBusy"
-                  @click="onDeleteTransaction(row)"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M3 6h18" />
-                    <path d="M8 6V4h8v2" />
-                    <path d="M19 6l-1 14H6L5 6" />
-                  </svg>
-                </button>
-              </div>
-            </li>
-          </ul>
         </template>
 
         <template v-else>
@@ -932,41 +1201,156 @@ async function onCreateFromProposal(proposal) {
             </svg>
             <p class="font-semibold">No accounts yet</p>
             <p class="type-caption type-muted mt-1">Add your cash, bank, or e-wallet accounts to track balances.</p>
-            <button class="finance-primary-btn mt-3" type="button" @click="openModal = 'account'">
+            <button class="finance-primary-btn mt-3" type="button" @click="openCreateAccount">
               Add account
             </button>
           </div>
-          <ul v-else class="space-y-3">
-            <li
+          <div v-else class="finance-account-grid">
+            <article
               v-for="account in activeAccounts"
               :key="account.id"
-              class="finance-row flex flex-wrap items-center justify-between gap-3"
+              class="finance-account-card"
+              :class="`finance-account-card--${account.account_type || 'other'}`"
             >
-              <div class="min-w-0">
-                <p class="font-semibold text-slate-900 dark:text-slate-100">{{ account.name }}</p>
-                <p class="type-caption type-muted capitalize">{{ account.account_type }}</p>
-              </div>
-              <div class="flex items-center gap-3">
-                <strong class="tabular-nums" :class="gainClass(accountBalances[account.id] || 0)">
-                  {{ formatMoney(accountBalances[account.id] || 0) }}
-                </strong>
-                <button
-                  class="finance-action-btn"
-                  type="button"
-                  aria-label="Archive account"
-                  title="Archive"
-                  :disabled="isBusy"
-                  @click="onArchiveAccount(account)"
+              <span class="finance-account-card__glow" aria-hidden="true"></span>
+              <span class="finance-account-card__mark" aria-hidden="true">
+                <svg
+                  v-if="account.account_type === 'cash'"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
                 >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M3 7h18" />
-                    <path d="M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7" />
-                    <path d="M10 11h4" />
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v10M15.5 9.5c0-1.4-1.6-2.5-3.5-2.5S8.5 8.1 8.5 9.5 10.1 12 12 12s3.5 1.1 3.5 2.5-1.6 2.5-3.5 2.5-3.5-1.1-3.5-2.5" />
+                </svg>
+                <svg
+                  v-else-if="account.account_type === 'bank'"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <path d="M3 10h18L12 3 3 10Z" />
+                  <path d="M5 10v8M9 10v8M15 10v8M19 10v8" />
+                  <path d="M3 18h18" />
+                </svg>
+                <svg
+                  v-else-if="account.account_type === 'ewallet'"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
+                  <rect x="5" y="2" width="14" height="20" rx="2.5" />
+                  <path d="M9 6h6" />
+                  <circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H20a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5.5A2.5 2.5 0 0 1 3 15.5v-7Z" />
+                  <path d="M3 10h18" />
+                  <circle cx="16.5" cy="14" r="1.25" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+
+              <div class="finance-account-card__top">
+                <span
+                  class="finance-account-card__icon"
+                  :class="`finance-account-card__icon--${account.account_type || 'other'}`"
+                  aria-hidden="true"
+                >
+                  <svg
+                    v-if="account.account_type === 'cash'"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v10M15.5 9.5c0-1.4-1.6-2.5-3.5-2.5S8.5 8.1 8.5 9.5 10.1 12 12 12s3.5 1.1 3.5 2.5-1.6 2.5-3.5 2.5-3.5-1.1-3.5-2.5" />
                   </svg>
-                </button>
+                  <svg
+                    v-else-if="account.account_type === 'bank'"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 10h18L12 3 3 10Z" />
+                    <path d="M5 10v8M9 10v8M15 10v8M19 10v8" />
+                    <path d="M3 18h18" />
+                  </svg>
+                  <svg
+                    v-else-if="account.account_type === 'ewallet'"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="5" y="2" width="14" height="20" rx="2.5" />
+                    <path d="M9 6h6" />
+                    <circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none" />
+                  </svg>
+                  <svg
+                    v-else
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H20a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5.5A2.5 2.5 0 0 1 3 15.5v-7Z" />
+                    <path d="M3 10h18" />
+                    <circle cx="16.5" cy="14" r="1.25" fill="currentColor" stroke="none" />
+                  </svg>
+                </span>
+                <div class="finance-account-card__top-end">
+                  <span class="finance-account-card__chip">{{ accountTypeLabel(account.account_type) }}</span>
+                  <button
+                    class="finance-action-btn"
+                    type="button"
+                    aria-label="Edit account"
+                    title="Edit"
+                    :disabled="isBusy"
+                    @click="openEditAccount(account)"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                    </svg>
+                  </button>
+                  <button
+                    class="finance-action-btn finance-account-card__archive"
+                    type="button"
+                    aria-label="Archive account"
+                    title="Archive"
+                    :disabled="isBusy"
+                    @click="onArchiveAccount(account)"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M3 7h18" />
+                      <path d="M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7" />
+                      <path d="M10 11h4" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </li>
-          </ul>
+
+              <h3 class="finance-account-card__name">{{ account.name }}</h3>
+              <p class="finance-account-card__meta">
+                Opening {{ formatMoney(account.opening_balance || 0) }}
+              </p>
+
+              <div class="finance-account-card__footer">
+                <span class="finance-account-card__balance-label">Available balance</span>
+                <p
+                  class="finance-account-card__balance"
+                  :class="gainClass(accountBalances[account.id] || 0)"
+                >
+                  {{ formatMoney(accountBalances[account.id] || 0) }}
+                </p>
+              </div>
+            </article>
+          </div>
         </template>
       </template>
 
@@ -1068,38 +1452,53 @@ async function onCreateFromProposal(proposal) {
               </button>
             </div>
 
-            <ul v-else class="finance-limit-list" role="list">
-              <li
+            <div v-else class="finance-limit-grid">
+              <article
                 v-for="row in categoryProgress"
                 :key="row.category.id"
-                class="finance-limit-row"
-                :class="`finance-limit-row--${progressTone(row)}`"
+                class="finance-limit-card"
+                :class="`finance-limit-card--${progressTone(row)}`"
                 :style="{ '--limit-accent': row.category.color || '#1e40af' }"
               >
-                <div class="finance-limit-row__top">
-                  <div class="finance-limit-row__identity">
-                    <span class="finance-limit-swatch" aria-hidden="true" />
-                    <div class="min-w-0">
-                      <p class="finance-limit-row__name">{{ row.category.name }}</p>
-                      <p v-if="row.limit != null" class="finance-limit-row__meta">
-                        <template v-if="row.over">Over by {{ formatMoney(Math.abs(row.remaining)) }}</template>
-                        <template v-else>{{ formatMoney(row.remaining) }} left</template>
-                      </p>
-                      <p v-else class="finance-limit-row__meta">No monthly limit</p>
-                    </div>
+                <span class="finance-limit-card__glow" aria-hidden="true"></span>
+
+                <div class="finance-limit-card__top">
+                  <span class="finance-limit-card__icon" aria-hidden="true">
+                    <FinanceCategoryIcon :icon="row.category.icon" />
+                  </span>
+                  <span
+                    class="finance-limit-card__status"
+                    :class="`finance-limit-card__status--${progressTone(row)}`"
+                  >
+                    <template v-if="row.limit == null">Tracked</template>
+                    <template v-else-if="row.over">Over</template>
+                    <template v-else-if="progressTone(row) === 'warn'">Near limit</template>
+                    <template v-else>On track</template>
+                  </span>
+                </div>
+
+                <h3 class="finance-limit-card__name">{{ row.category.name }}</h3>
+                <p class="finance-limit-card__meta">
+                  <template v-if="row.limit != null">
+                    <template v-if="row.over">Over by {{ formatMoney(Math.abs(row.remaining)) }}</template>
+                    <template v-else>{{ formatMoney(row.remaining) }} remaining</template>
+                  </template>
+                  <template v-else>No monthly limit set</template>
+                </p>
+
+                <div class="finance-limit-card__figures">
+                  <div>
+                    <span class="finance-limit-card__label">Spent</span>
+                    <p class="finance-limit-card__spent tabular-nums">{{ formatMoney(row.spent) }}</p>
                   </div>
-                  <div class="finance-limit-row__figures">
-                    <p class="finance-limit-row__spent tabular-nums">
-                      <template v-if="row.limit != null">
-                        {{ formatMoney(row.spent) }}
-                        <span class="finance-limit-row__slash">/</span>
-                        {{ formatMoney(row.limit) }}
-                      </template>
-                      <template v-else>{{ formatMoney(row.spent) }}</template>
+                  <div class="text-right">
+                    <span class="finance-limit-card__label">{{ row.limit != null ? 'Limit' : 'Cap' }}</span>
+                    <p class="finance-limit-card__limit tabular-nums">
+                      {{ row.limit != null ? formatMoney(row.limit) : '—' }}
                     </p>
-                    <p v-if="row.limit != null" class="finance-limit-row__pct tabular-nums">{{ row.pct }}%</p>
                   </div>
                 </div>
+
                 <div
                   v-if="row.limit != null"
                   class="finance-limit-meter"
@@ -1114,8 +1513,11 @@ async function onCreateFromProposal(proposal) {
                     :style="{ width: `${Math.min(Math.max(row.pct, row.spent > 0 ? 3 : 0), 100)}%` }"
                   />
                 </div>
-              </li>
-            </ul>
+                <p v-if="row.limit != null" class="finance-limit-card__pct tabular-nums">
+                  {{ row.pct }}% used
+                </p>
+              </article>
+            </div>
           </article>
         </template>
 
@@ -1139,94 +1541,120 @@ async function onCreateFromProposal(proposal) {
             </button>
           </div>
 
-          <div v-if="!subscriptionRows.length" class="finance-empty">
-            <p class="font-semibold">No recurring items</p>
-            <p class="type-caption type-muted mt-1">Track subscriptions and recurring bills in one place.</p>
-            <button class="finance-primary-btn mt-3" type="button" @click="openModal = 'recurring'">
-              Add recurring
-            </button>
+          <div class="finance-tx-table-wrap">
+            <table class="finance-tx-table">
+              <caption class="sr-only">
+                {{ subscriptionsOnly ? 'Subscriptions' : 'Recurring items' }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Cadence</th>
+                  <th scope="col">Next due</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">Account</th>
+                  <th scope="col" class="finance-tx-table__amount">Amount</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="finance-tx-table__actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!subscriptionRows.length">
+                  <td colspan="9" class="finance-tx-table__empty">
+                    <p class="font-semibold text-slate-800 dark:text-slate-100">No recurring items</p>
+                    <p class="type-caption type-muted mt-1">Track subscriptions and recurring bills in one place.</p>
+                    <button class="finance-primary-btn mt-3" type="button" @click="openModal = 'recurring'">
+                      Add recurring
+                    </button>
+                  </td>
+                </tr>
+                <tr v-for="row in subscriptionRows" :key="row.id">
+                  <td class="finance-tx-table__category">
+                    <span class="font-semibold">{{ row.name }}</span>
+                    <span
+                      v-if="row.is_subscription"
+                      class="finance-recurring-badge finance-recurring-badge--sub"
+                    >
+                      sub
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      class="finance-tx-type"
+                      :class="row.type === 'income' ? 'finance-tx-type--income' : 'finance-tx-type--expense'"
+                    >
+                      {{ row.type === 'income' ? 'Income' : 'Expense' }}
+                    </span>
+                  </td>
+                  <td class="capitalize">{{ row.cadence }}</td>
+                  <td class="finance-tx-table__date">{{ row.next_due }}</td>
+                  <td>{{ row.category_id ? categoryName(row.category_id) : '—' }}</td>
+                  <td>{{ row.account_id ? accountName(row.account_id) : '—' }}</td>
+                  <td
+                    class="finance-tx-table__amount"
+                    :class="row.type === 'income' ? 'finance-tx-table__amount--in' : 'finance-tx-table__amount--out'"
+                  >
+                    {{ formatMoney(row.amount) }}
+                  </td>
+                  <td>
+                    <span
+                      class="finance-recurring-badge"
+                      :class="row.is_active ? 'finance-recurring-badge--active' : 'finance-recurring-badge--paused'"
+                    >
+                      {{ row.is_active ? 'Active' : 'Paused' }}
+                    </span>
+                  </td>
+                  <td class="finance-tx-table__actions">
+                    <button
+                      class="finance-action-btn finance-action-btn--success"
+                      type="button"
+                      aria-label="Post recurring item"
+                      title="Post"
+                      :disabled="isBusy || !row.is_active"
+                      @click="onPostRecurring(row)"
+                    >
+                      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M5 12h14" />
+                        <path d="m12 5 7 7-7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      class="finance-action-btn"
+                      type="button"
+                      :aria-label="row.is_active ? 'Pause recurring item' : 'Activate recurring item'"
+                      :title="row.is_active ? 'Pause' : 'Activate'"
+                      :disabled="isBusy"
+                      @click="onToggleRecurring(row)"
+                    >
+                      <svg
+                        v-if="row.is_active"
+                        class="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 5v14M16 5v14" />
+                      </svg>
+                      <svg
+                        v-else
+                        class="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        aria-hidden="true"
+                      >
+                        <path d="m7 4 12 8-12 8V4Z" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <ul v-else class="space-y-3">
-            <li
-              v-for="row in subscriptionRows"
-              :key="row.id"
-              class="finance-row flex flex-wrap items-center justify-between gap-3"
-            >
-              <div class="min-w-0">
-                <p class="flex flex-wrap items-center gap-2 font-semibold text-slate-900 dark:text-slate-100">
-                  {{ row.name }}
-                  <span
-                    v-if="row.is_subscription"
-                    class="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-500/20 dark:text-blue-200"
-                  >
-                    subscription
-                  </span>
-                  <span
-                    v-if="!row.is_active"
-                    class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-400"
-                  >
-                    paused
-                  </span>
-                </p>
-                <p class="finance-label">
-                  {{ row.cadence }} · next {{ row.next_due }}
-                  <span v-if="row.category_id"> · {{ categoryName(row.category_id) }}</span>
-                </p>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <strong
-                  class="tabular-nums"
-                  :class="row.type === 'income' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'"
-                >
-                  {{ formatMoney(row.amount) }}
-                </strong>
-                <button
-                  class="finance-action-btn finance-action-btn--success"
-                  type="button"
-                  aria-label="Post recurring item"
-                  title="Post"
-                  :disabled="isBusy || !row.is_active"
-                  @click="onPostRecurring(row)"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M5 12h14" />
-                    <path d="m12 5 7 7-7 7" />
-                  </svg>
-                </button>
-                <button
-                  class="finance-action-btn"
-                  type="button"
-                  :aria-label="row.is_active ? 'Pause recurring item' : 'Activate recurring item'"
-                  :title="row.is_active ? 'Pause' : 'Activate'"
-                  :disabled="isBusy"
-                  @click="onToggleRecurring(row)"
-                >
-                  <svg
-                    v-if="row.is_active"
-                    class="h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path d="M8 5v14M16 5v14" />
-                  </svg>
-                  <svg
-                    v-else
-                    class="h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    aria-hidden="true"
-                  >
-                    <path d="m7 4 12 8-12 8V4Z" />
-                  </svg>
-                </button>
-              </div>
-            </li>
-          </ul>
         </template>
       </template>
 
@@ -1238,11 +1666,8 @@ async function onCreateFromProposal(proposal) {
               <p class="finance-kicker">Balance sheet</p>
               <h1 class="finance-hero-title mt-1">Net worth</h1>
               <p class="finance-modal-subtitle mt-1">
-                Investments and debts.
-                <template v-if="networthTab === 'debts' && liabilities.length">
-                  Total owed:
-                  <strong class="text-rose-600 dark:text-rose-300">{{ formatMoney(liabilitiesTotal) }}</strong>
-                </template>
+                Cash + investments − debts =
+                <strong :class="gainClass(netWorth)">{{ formatMoney(netWorth) }}</strong>
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
@@ -1310,36 +1735,47 @@ async function onCreateFromProposal(proposal) {
         <template v-if="networthTab === 'investments'">
           <div v-if="!portfolioRows.length" class="finance-empty">
             <p class="font-semibold">No holdings yet</p>
-            <p class="type-caption type-muted mt-1">Add stocks, UITFs, crypto, or other assets to track your portfolio.</p>
+            <p class="type-caption type-muted mt-1">Add stocks, UITFs, MP2, crypto, or other assets — each one shows as a card.</p>
             <button class="finance-primary-btn mt-3" type="button" @click="openModal = 'holding'">
               Add holding
             </button>
           </div>
           <template v-else>
-            <ul class="space-y-3">
-              <li
+            <div class="finance-holding-grid">
+              <article
                 v-for="row in portfolioRows"
                 :key="row.holding.id"
-                class="finance-row flex flex-wrap items-center justify-between gap-3"
+                class="finance-holding-card"
+                :class="`finance-holding-card--${row.holding.asset_class || 'other'}`"
               >
-                <div class="min-w-0">
-                  <p class="font-semibold text-slate-900 dark:text-slate-100">{{ row.holding.name }}</p>
-                  <p class="type-caption type-muted capitalize">
-                    {{ (row.holding.asset_class || 'other').replace(/_/g, ' ') }}
-                    · {{ row.units }} units @ {{ formatMoney(row.price) }}
-                  </p>
+                <span class="finance-holding-card__glow" aria-hidden="true"></span>
+                <div class="finance-holding-card__top">
+                  <span class="finance-holding-card__icon" aria-hidden="true">
+                    <FinanceHoldingIcon :asset-class="row.holding.asset_class" />
+                  </span>
+                  <span class="finance-holding-card__chip">{{ assetClassLabel(row.holding.asset_class) }}</span>
                 </div>
-                <div class="text-right">
-                  <p class="font-bold tabular-nums">{{ formatMoney(row.marketValue) }}</p>
-                  <p class="type-caption tabular-nums" :class="gainClass(row.gain)">
-                    {{ formatMoney(row.gain) }}
-                    <span v-if="row.cost"> ({{ row.gainPct >= 0 ? '+' : '' }}{{ row.gainPct.toFixed(1) }}%)</span>
-                  </p>
+                <h3 class="finance-holding-card__name">{{ row.holding.name }}</h3>
+                <p class="finance-holding-card__meta">
+                  {{ row.units }} units · {{ formatMoney(row.price) }} / unit
+                </p>
+                <div class="finance-holding-card__footer">
+                  <div>
+                    <span class="finance-holding-card__label">Market value</span>
+                    <p class="finance-holding-card__value">{{ formatMoney(row.marketValue) }}</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="finance-holding-card__label">Gain</span>
+                    <p class="finance-holding-card__gain" :class="gainClass(row.gain)">
+                      {{ formatMoney(row.gain) }}
+                      <span v-if="row.cost">({{ row.gainPct >= 0 ? '+' : '' }}{{ row.gainPct.toFixed(1) }}%)</span>
+                    </p>
+                  </div>
                 </div>
-              </li>
-            </ul>
+              </article>
+            </div>
 
-            <article class="finance-panel">
+            <article class="finance-panel mt-4">
               <h3 class="type-card-title mb-3">Asset allocation</h3>
               <DashboardDonutChart
                 :segments="allocationSegments"
@@ -1371,31 +1807,34 @@ async function onCreateFromProposal(proposal) {
         <template v-else>
           <div v-if="!liabilities.length" class="finance-empty">
             <p class="font-semibold">No debts tracked</p>
-            <p class="type-caption type-muted mt-1">Add loans or credit cards to generate a payoff plan.</p>
+            <p class="type-caption type-muted mt-1">Add loans or credit cards — each debt shows as a card.</p>
             <button class="finance-primary-btn mt-3" type="button" @click="openModal = 'debt'">
               Add debt
             </button>
           </div>
           <template v-else>
-            <ul class="space-y-3">
-              <li
-                v-for="row in liabilities"
-                :key="row.id"
-                class="finance-row flex flex-wrap items-center justify-between gap-3"
-              >
-                <div class="min-w-0">
-                  <p class="font-semibold text-slate-900 dark:text-slate-100">{{ row.name }}</p>
-                  <p class="finance-label">
-                    APR {{ row.apr || 0 }}% · min {{ formatMoney(row.min_payment || 0) }}
-                  </p>
+            <div class="finance-debt-grid">
+              <article v-for="row in liabilities" :key="row.id" class="finance-debt-card">
+                <span class="finance-debt-card__glow" aria-hidden="true"></span>
+                <div class="finance-debt-card__top">
+                  <span class="finance-debt-card__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="5" width="20" height="14" rx="2" />
+                      <path d="M2 10h20" />
+                    </svg>
+                  </span>
+                  <span class="finance-debt-card__chip">{{ row.apr || 0 }}% APR</span>
                 </div>
-                <strong class="tabular-nums text-rose-600 dark:text-rose-300">
-                  {{ formatMoney(row.balance) }}
-                </strong>
-              </li>
-            </ul>
+                <h3 class="finance-debt-card__name">{{ row.name }}</h3>
+                <p class="finance-debt-card__meta">Min payment {{ formatMoney(row.min_payment || 0) }}</p>
+                <div class="finance-debt-card__footer">
+                  <span class="finance-debt-card__label">Balance owed</span>
+                  <p class="finance-debt-card__value">{{ formatMoney(row.balance) }}</p>
+                </div>
+              </article>
+            </div>
 
-            <article class="finance-panel">
+            <article class="finance-panel mt-4">
               <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 class="type-card-title">Payoff plan</h3>
@@ -1436,27 +1875,19 @@ async function onCreateFromProposal(proposal) {
               <form class="finance-form-grid finance-form-grid--3" @submit.prevent="onPayDownLiability">
                 <div>
                   <label class="finance-label" for="finance-paydown-debt">Debt</label>
-                  <select
+                  <FinanceSelect
                     id="finance-paydown-debt"
                     v-model="paydownForm.id"
-                    class="finance-input"
-                    required
-                  >
-                    <option value="">Select debt</option>
-                    <option v-for="row in liabilities" :key="row.id" :value="row.id">
-                      {{ row.name }}
-                    </option>
-                  </select>
+                    :options="liabilitySelectOptions"
+                    aria-label="Debt"
+                    placeholder="Select debt"
+                  />
                 </div>
                 <div>
                   <label class="finance-label" for="finance-paydown-amount">Payment amount</label>
-                  <input
+                  <FinanceMoneyInput
                     id="finance-paydown-amount"
                     v-model="paydownForm.amount"
-                    class="finance-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
                     required
                   />
                 </div>
@@ -1508,55 +1939,53 @@ async function onCreateFromProposal(proposal) {
             Create first goal
           </button>
         </div>
-        <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <article
-            v-for="goal in goals"
-            :key="goal.id"
-            class="finance-goal-card"
-          >
-            <div class="flex flex-wrap items-start justify-between gap-2">
-              <p class="font-semibold text-slate-900 dark:text-slate-100">{{ goal.name }}</p>
-              <p class="text-sm tabular-nums type-muted">
-                {{ formatMoney(goal.current_amount) }} / {{ formatMoney(goal.target_amount) }}
-              </p>
+        <div v-else class="finance-goal-grid">
+          <article v-for="goal in goals" :key="goal.id" class="finance-goal-card">
+            <span class="finance-goal-card__glow" aria-hidden="true"></span>
+            <div class="finance-goal-card__top">
+              <span class="finance-goal-card__badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="8" />
+                  <circle cx="12" cy="12" r="4" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+              <span class="finance-goal-card__pct">{{ goalProgressPct(goal) }}%</span>
             </div>
-            <p v-if="goal.due_on" class="type-caption type-muted mt-1">Due {{ goal.due_on }}</p>
+            <h3 class="finance-goal-card__name">{{ goal.name }}</h3>
+            <p v-if="goal.due_on" class="finance-goal-card__due">Due {{ goal.due_on }}</p>
+            <p v-else class="finance-goal-card__due">No due date</p>
 
-            <div class="finance-progress mt-3">
-              <span
-                :style="{
-                  width: `${Math.min(100, Math.round(((Number(goal.current_amount) || 0) / (Number(goal.target_amount) || 1)) * 100))}%`,
-                }"
-              />
+            <div class="finance-goal-card__figures">
+              <div>
+                <span class="finance-goal-card__label">Saved</span>
+                <p class="finance-goal-card__value">{{ formatMoney(goal.current_amount) }}</p>
+              </div>
+              <div class="text-right">
+                <span class="finance-goal-card__label">Target</span>
+                <p class="finance-goal-card__value finance-goal-card__value--muted">
+                  {{ formatMoney(goal.target_amount) }}
+                </p>
+              </div>
             </div>
-            <p class="mt-1 text-right text-xs tabular-nums type-muted">
-              {{ Math.min(100, Math.round(((Number(goal.current_amount) || 0) / (Number(goal.target_amount) || 1)) * 100)) }}%
+            <p class="finance-goal-card__due mt-2">
+              {{ formatMoney(goalRemaining(goal)) }} left to go
             </p>
 
-            <form
-              class="mt-3 flex flex-wrap items-end gap-2"
-              @submit.prevent="onUpdateGoalAmount(goal, $event.target.elements.current.value)"
-            >
-              <div class="flex-1">
+            <div class="finance-progress">
+              <span :style="{ width: `${goalProgressPct(goal)}%` }" />
+            </div>
+
+            <form class="finance-goal-card__form" @submit.prevent="onUpdateGoalAmount(goal)">
+              <div>
                 <label class="finance-label" :for="`goal-current-${goal.id}`">Update saved</label>
-                <input
+                <FinanceMoneyInput
                   :id="`goal-current-${goal.id}`"
-                  class="finance-input tabular-nums"
-                  type="number"
-                  name="current"
-                  min="0"
-                  step="0.01"
-                  :value="goal.current_amount"
+                  v-model="goalAmountDrafts[goal.id]"
                   :aria-label="`Current amount for ${goal.name}`"
                 />
               </div>
-              <button
-                class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-blue-700 dark:border-slate-600 dark:text-blue-300"
-                type="submit"
-                :disabled="isBusy"
-              >
-                Save
-              </button>
+              <button class="finance-goal-card__save" type="submit" :disabled="isBusy">Save</button>
             </form>
           </article>
         </div>
@@ -1568,74 +1997,85 @@ async function onCreateFromProposal(proposal) {
 
     <!-- ── MODALS ──────────────────────────────────────────────────── -->
     <Teleport to="body">
-      <!-- Add Account -->
+      <!-- Add / Edit Account -->
       <div
         v-if="openModal === 'account'"
         class="finance-modal-backdrop"
         @click.self="closeModal"
       >
-        <div class="finance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-account-title">
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-account-title"
+          @submit.prevent="onCreateAccount"
+        >
           <div class="finance-modal-handle" aria-hidden="true"></div>
-          <div class="finance-modal-header">
+          <header class="finance-modal-header">
             <div>
               <p class="finance-kicker">Accounts</p>
-              <h2 id="modal-account-title" class="finance-modal-title">Add account</h2>
-              <p class="finance-modal-subtitle">Track a cash, bank, or e-wallet balance.</p>
+              <h2 id="modal-account-title" class="finance-modal-title">
+                {{ editingAccountId ? 'Edit account' : 'Add account' }}
+              </h2>
+              <p class="finance-modal-subtitle">
+                {{ editingAccountId ? 'Update name, type, or opening balance.' : 'Track a cash, bank, or e-wallet balance.' }}
+              </p>
             </div>
             <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
-          </div>
+          </header>
           <div class="finance-modal-body">
-            <form class="finance-form-grid finance-form-grid--2" @submit.prevent="onCreateAccount">
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-account-name">Account name</label>
-                <input
-                  id="modal-account-name"
-                  v-model="accountForm.name"
-                  class="finance-input"
-                  type="text"
-                  required
-                  placeholder="e.g. BPI Savings"
-                />
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Account details</h4>
+                  <p class="finance-modal-section__hint">Name the account and set its opening balance.</p>
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-account-type">Type</label>
-                <select
-                  id="modal-account-type"
-                  v-model="accountForm.account_type"
-                  class="finance-input"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="bank">Bank</option>
-                  <option value="ewallet">E-wallet</option>
-                  <option value="other">Other</option>
-                </select>
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-account-name">Account name</label>
+                  <input
+                    id="modal-account-name"
+                    v-model="accountForm.name"
+                    class="finance-input"
+                    type="text"
+                    required
+                    placeholder="e.g. BPI Savings"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-account-type">Type</label>
+                  <FinanceSelect
+                    id="modal-account-type"
+                    v-model="accountForm.account_type"
+                    :options="accountTypeOptions"
+                    aria-label="Account type"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-account-opening">Opening balance</label>
+                  <FinanceMoneyInput
+                    id="modal-account-opening"
+                    v-model="accountForm.opening_balance"
+                  />
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-account-opening">Opening balance</label>
-                <input
-                  id="modal-account-opening"
-                  v-model="accountForm.opening_balance"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <button
-                  class="finance-primary-btn w-full"
-                  type="submit"
-                  :disabled="isBusy || !accountForm.name.trim()"
-                >
-                  Add account
-                </button>
-              </div>
-            </form>
+            </section>
           </div>
-        </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !accountForm.name.trim()"
+            >
+              {{ editingAccountId ? 'Save changes' : 'Add account' }}
+            </button>
+          </footer>
+        </form>
       </div>
 
       <!-- Transfer -->
@@ -1644,9 +2084,15 @@ async function onCreateFromProposal(proposal) {
         class="finance-modal-backdrop"
         @click.self="closeModal"
       >
-        <div class="finance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-transfer-title">
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-transfer-title"
+          @submit.prevent="onCreateTransfer"
+        >
           <div class="finance-modal-handle" aria-hidden="true"></div>
-          <div class="finance-modal-header">
+          <header class="finance-modal-header">
             <div>
               <p class="finance-kicker">Accounts</p>
               <h2 id="modal-transfer-title" class="finance-modal-title">Transfer funds</h2>
@@ -1655,87 +2101,84 @@ async function onCreateFromProposal(proposal) {
             <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
-          </div>
+          </header>
           <div class="finance-modal-body">
-            <form class="finance-form-grid finance-form-grid--2" @submit.prevent="onCreateTransfer">
-              <div>
-                <label class="finance-label" for="modal-transfer-from">From</label>
-                <select
-                  id="modal-transfer-from"
-                  v-model="transferForm.from_account_id"
-                  class="finance-input"
-                  required
-                >
-                  <option disabled value="">Select account</option>
-                  <option v-for="account in activeAccounts" :key="account.id" :value="account.id">
-                    {{ account.name }}
-                  </option>
-                </select>
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Transfer details</h4>
+                  <p class="finance-modal-section__hint">Choose source, destination, amount, and date.</p>
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-transfer-to">To</label>
-                <select
-                  id="modal-transfer-to"
-                  v-model="transferForm.to_account_id"
-                  class="finance-input"
-                  required
-                >
-                  <option disabled value="">Select account</option>
-                  <option v-for="account in activeAccounts" :key="account.id" :value="account.id">
-                    {{ account.name }}
-                  </option>
-                </select>
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-transfer-from">From</label>
+                  <FinanceSelect
+                    id="modal-transfer-from"
+                    v-model="transferForm.from_account_id"
+                    :options="accountSelectOptionsWithPlaceholder"
+                    aria-label="From account"
+                    placeholder="Select account"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-transfer-to">To</label>
+                  <FinanceSelect
+                    id="modal-transfer-to"
+                    v-model="transferForm.to_account_id"
+                    :options="accountSelectOptionsWithPlaceholder"
+                    aria-label="To account"
+                    placeholder="Select account"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-transfer-amount">Amount</label>
+                  <FinanceMoneyInput
+                    id="modal-transfer-amount"
+                    v-model="transferForm.amount"
+                    min="0.01"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-transfer-date">Date</label>
+                  <FinanceDateInput
+                    id="modal-transfer-date"
+                    v-model="transferForm.occurred_on"
+                    required
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-transfer-note">Note</label>
+                  <input
+                    id="modal-transfer-note"
+                    v-model="transferForm.note"
+                    class="finance-input"
+                    type="text"
+                    maxlength="120"
+                    placeholder="Optional"
+                  />
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-transfer-amount">Amount</label>
-                <input
-                  id="modal-transfer-amount"
-                  v-model="transferForm.amount"
-                  class="finance-input"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  required
-                />
-              </div>
-              <div>
-                <label class="finance-label" for="modal-transfer-date">Date</label>
-                <input
-                  id="modal-transfer-date"
-                  v-model="transferForm.occurred_on"
-                  class="finance-input"
-                  type="date"
-                  required
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-transfer-note">Note</label>
-                <input
-                  id="modal-transfer-note"
-                  v-model="transferForm.note"
-                  class="finance-input"
-                  type="text"
-                  maxlength="120"
-                  placeholder="Optional"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <button
-                  class="finance-primary-btn w-full"
-                  type="submit"
-                  :disabled="
-                    isBusy ||
-                    !transferForm.from_account_id ||
-                    !transferForm.to_account_id ||
-                    !(Number(transferForm.amount) > 0)
-                  "
-                >
-                  Transfer
-                </button>
-              </div>
-            </form>
+            </section>
           </div>
-        </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="
+                isBusy ||
+                !transferForm.from_account_id ||
+                !transferForm.to_account_id ||
+                !(Number(transferForm.amount) > 0)
+              "
+            >
+              Transfer
+            </button>
+          </footer>
+        </form>
       </div>
 
       <!-- Recurring / Subscription -->
@@ -1744,14 +2187,15 @@ async function onCreateFromProposal(proposal) {
         class="finance-modal-backdrop"
         @click.self="closeModal"
       >
-        <div
+        <form
           class="finance-modal-panel finance-modal-panel--wide"
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-recurring-title"
+          @submit.prevent="onCreateRecurring"
         >
           <div class="finance-modal-handle" aria-hidden="true"></div>
-          <div class="finance-modal-header">
+          <header class="finance-modal-header">
             <div>
               <p class="finance-kicker">Subscriptions</p>
               <h2 id="modal-recurring-title" class="finance-modal-title">Add recurring item</h2>
@@ -1760,113 +2204,112 @@ async function onCreateFromProposal(proposal) {
             <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
+          </header>
+          <div class="finance-modal-body space-y-4">
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Basics</h4>
+                  <p class="finance-modal-section__hint">Name, amount, and whether this repeats as income or expense.</p>
+                </div>
+              </div>
+              <div class="finance-form-grid finance-form-grid--3">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-recurring-name">Name</label>
+                  <input
+                    id="modal-recurring-name"
+                    v-model="recurringForm.name"
+                    class="finance-input"
+                    type="text"
+                    required
+                    placeholder="e.g. Netflix"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-recurring-amount">Amount</label>
+                  <FinanceMoneyInput
+                    id="modal-recurring-amount"
+                    v-model="recurringForm.amount"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-recurring-type">Type</label>
+                  <FinanceSelect
+                    id="modal-recurring-type"
+                    v-model="recurringForm.type"
+                    :options="recurringTypeOptions"
+                    aria-label="Recurring type"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-recurring-cadence">Cadence</label>
+                  <FinanceSelect
+                    id="modal-recurring-cadence"
+                    v-model="recurringForm.cadence"
+                    :options="cadenceOptions"
+                    aria-label="Cadence"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-recurring-due">Next due</label>
+                  <FinanceDateInput
+                    id="modal-recurring-due"
+                    v-model="recurringForm.next_due"
+                  />
+                </div>
+              </div>
+            </section>
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">2</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Classification</h4>
+                  <p class="finance-modal-section__hint">Optional category and account for auto-logged entries.</p>
+                </div>
+              </div>
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-recurring-category">Category</label>
+                  <FinanceSelect
+                    id="modal-recurring-category"
+                    v-model="recurringForm.category_id"
+                    :options="recurringCategoryOptions"
+                    aria-label="Category"
+                    placeholder="None"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-recurring-account">Account</label>
+                  <FinanceSelect
+                    id="modal-recurring-account"
+                    v-model="recurringForm.account_id"
+                    :options="accountSelectOptionsWithNone"
+                    aria-label="Account"
+                    placeholder="None"
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    <input v-model="recurringForm.is_subscription" type="checkbox" />
+                    Mark as subscription
+                  </label>
+                </div>
+              </div>
+            </section>
           </div>
-          <div class="finance-modal-body">
-            <form class="finance-form-grid finance-form-grid--3" @submit.prevent="onCreateRecurring">
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-recurring-name">Name</label>
-                <input
-                  id="modal-recurring-name"
-                  v-model="recurringForm.name"
-                  class="finance-input"
-                  type="text"
-                  required
-                  placeholder="e.g. Netflix"
-                />
-              </div>
-              <div>
-                <label class="finance-label" for="modal-recurring-amount">Amount</label>
-                <input
-                  id="modal-recurring-amount"
-                  v-model="recurringForm.amount"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  required
-                />
-              </div>
-              <div>
-                <label class="finance-label" for="modal-recurring-type">Type</label>
-                <select
-                  id="modal-recurring-type"
-                  v-model="recurringForm.type"
-                  class="finance-input"
-                >
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
-                </select>
-              </div>
-              <div>
-                <label class="finance-label" for="modal-recurring-cadence">Cadence</label>
-                <select
-                  id="modal-recurring-cadence"
-                  v-model="recurringForm.cadence"
-                  class="finance-input"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <div>
-                <label class="finance-label" for="modal-recurring-category">Category</label>
-                <select
-                  id="modal-recurring-category"
-                  v-model="recurringForm.category_id"
-                  class="finance-input"
-                >
-                  <option value="">None</option>
-                  <option
-                    v-for="category in recurringForm.type === 'income' ? incomeCategories : expenseCategories"
-                    :key="category.id"
-                    :value="category.id"
-                  >
-                    {{ category.name }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="finance-label" for="modal-recurring-account">Account</label>
-                <select
-                  id="modal-recurring-account"
-                  v-model="recurringForm.account_id"
-                  class="finance-input"
-                >
-                  <option value="">None</option>
-                  <option v-for="account in activeAccounts" :key="account.id" :value="account.id">
-                    {{ account.name }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="finance-label" for="modal-recurring-due">Next due</label>
-                <input
-                  id="modal-recurring-due"
-                  v-model="recurringForm.next_due"
-                  class="finance-input"
-                  type="date"
-                />
-              </div>
-              <div class="flex items-end">
-                <label class="flex items-center gap-2 text-sm font-semibold">
-                  <input v-model="recurringForm.is_subscription" type="checkbox" />
-                  Mark as subscription
-                </label>
-              </div>
-              <div class="sm:col-span-2 lg:col-span-3">
-                <button
-                  class="finance-primary-btn w-full"
-                  type="submit"
-                  :disabled="isBusy || !recurringForm.name.trim() || !recurringForm.amount"
-                >
-                  Add recurring item
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !recurringForm.name.trim() || !recurringForm.amount"
+            >
+              Add recurring item
+            </button>
+          </footer>
+        </form>
       </div>
 
       <!-- Add Holding -->
@@ -1875,9 +2318,15 @@ async function onCreateFromProposal(proposal) {
         class="finance-modal-backdrop"
         @click.self="closeModal"
       >
-        <div class="finance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-holding-title">
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-holding-title"
+          @submit.prevent="onCreateHolding"
+        >
           <div class="finance-modal-handle" aria-hidden="true"></div>
-          <div class="finance-modal-header">
+          <header class="finance-modal-header">
             <div>
               <p class="finance-kicker">Investments</p>
               <h2 id="modal-holding-title" class="finance-modal-title">Add holding</h2>
@@ -1886,69 +2335,69 @@ async function onCreateFromProposal(proposal) {
             <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
-          </div>
+          </header>
           <div class="finance-modal-body">
-            <form class="finance-form-grid finance-form-grid--2" @submit.prevent="onCreateHolding">
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-holding-name">Name</label>
-                <input
-                  id="modal-holding-name"
-                  v-model="holdingForm.name"
-                  class="finance-input"
-                  type="text"
-                  required
-                  placeholder="e.g. AAPL"
-                />
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Holding details</h4>
+                  <p class="finance-modal-section__hint">Set the asset class and initial lot (optional).</p>
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-holding-class">Asset class</label>
-                <select
-                  id="modal-holding-class"
-                  v-model="holdingForm.asset_class"
-                  class="finance-input"
-                >
-                  <option value="stock">Stock</option>
-                  <option value="uitf">UITF</option>
-                  <option value="mutual_fund">Mutual fund</option>
-                  <option value="crypto">Crypto</option>
-                  <option value="time_deposit">Time deposit</option>
-                  <option value="other">Other</option>
-                </select>
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-holding-name">Name</label>
+                  <input
+                    id="modal-holding-name"
+                    v-model="holdingForm.name"
+                    class="finance-input"
+                    type="text"
+                    required
+                    placeholder="e.g. AAPL"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-holding-class">Asset class</label>
+                  <FinanceSelect
+                    id="modal-holding-class"
+                    v-model="holdingForm.asset_class"
+                    :options="assetClassOptions"
+                    aria-label="Asset class"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-holding-units">Units</label>
+                  <input
+                    id="modal-holding-units"
+                    v-model="holdingForm.units"
+                    class="finance-input"
+                    type="number"
+                    min="0"
+                    step="any"
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-holding-cost">Unit cost</label>
+                  <FinanceMoneyInput
+                    id="modal-holding-cost"
+                    v-model="holdingForm.unit_cost"
+                  />
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-holding-units">Units</label>
-                <input
-                  id="modal-holding-units"
-                  v-model="holdingForm.units"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="any"
-                />
-              </div>
-              <div>
-                <label class="finance-label" for="modal-holding-cost">Unit cost</label>
-                <input
-                  id="modal-holding-cost"
-                  v-model="holdingForm.unit_cost"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <button
-                  class="finance-primary-btn w-full"
-                  type="submit"
-                  :disabled="isBusy || !holdingForm.name.trim()"
-                >
-                  Add holding
-                </button>
-              </div>
-            </form>
+            </section>
           </div>
-        </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !holdingForm.name.trim()"
+            >
+              Add holding
+            </button>
+          </footer>
+        </form>
       </div>
 
       <!-- Mark Price -->
@@ -1957,9 +2406,15 @@ async function onCreateFromProposal(proposal) {
         class="finance-modal-backdrop"
         @click.self="closeModal"
       >
-        <div class="finance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-mark-title">
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-mark-title"
+          @submit.prevent="onMarkPrice"
+        >
           <div class="finance-modal-handle" aria-hidden="true"></div>
-          <div class="finance-modal-header">
+          <header class="finance-modal-header">
             <div>
               <p class="finance-kicker">Investments</p>
               <h2 id="modal-mark-title" class="finance-modal-title">Mark price</h2>
@@ -1968,54 +2423,56 @@ async function onCreateFromProposal(proposal) {
             <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
-          </div>
+          </header>
           <div class="finance-modal-body">
-            <form class="grid gap-3" @submit.prevent="onMarkPrice">
-              <div>
-                <label class="finance-label" for="modal-mark-holding">Holding</label>
-                <select
-                  id="modal-mark-holding"
-                  v-model="markForm.holding_id"
-                  class="finance-input"
-                  required
-                >
-                  <option value="">Select holding</option>
-                  <option v-for="holding in holdings" :key="holding.id" :value="holding.id">
-                    {{ holding.name }}
-                  </option>
-                </select>
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Price mark</h4>
+                  <p class="finance-modal-section__hint">Manual mark — no live market feed.</p>
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-mark-price">Unit price</label>
-                <input
-                  id="modal-mark-price"
-                  v-model="markForm.unit_price"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  required
-                />
+              <div class="finance-form-grid">
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-mark-holding">Holding</label>
+                  <FinanceSelect
+                    id="modal-mark-holding"
+                    v-model="markForm.holding_id"
+                    :options="holdingSelectOptions"
+                    aria-label="Holding"
+                    placeholder="Select holding"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-mark-price">Unit price</label>
+                  <FinanceMoneyInput
+                    id="modal-mark-price"
+                    v-model="markForm.unit_price"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-mark-date">Date</label>
+                  <FinanceDateInput
+                    id="modal-mark-date"
+                    v-model="markForm.marked_on"
+                  />
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-mark-date">Date</label>
-                <input
-                  id="modal-mark-date"
-                  v-model="markForm.marked_on"
-                  class="finance-input"
-                  type="date"
-                />
-              </div>
-              <button
-                class="finance-primary-btn w-full"
-                type="submit"
-                :disabled="isBusy || !markForm.holding_id || markForm.unit_price === ''"
-              >
-                Update price
-              </button>
-            </form>
+            </section>
           </div>
-        </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !markForm.holding_id || markForm.unit_price === ''"
+            >
+              Update price
+            </button>
+          </footer>
+        </form>
       </div>
 
       <!-- Add Dividend -->
@@ -2024,9 +2481,15 @@ async function onCreateFromProposal(proposal) {
         class="finance-modal-backdrop"
         @click.self="closeModal"
       >
-        <div class="finance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-dividend-title">
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-dividend-title"
+          @submit.prevent="onAddDividend"
+        >
           <div class="finance-modal-handle" aria-hidden="true"></div>
-          <div class="finance-modal-header">
+          <header class="finance-modal-header">
             <div>
               <p class="finance-kicker">Investments</p>
               <h2 id="modal-dividend-title" class="finance-modal-title">Add dividend</h2>
@@ -2035,66 +2498,66 @@ async function onCreateFromProposal(proposal) {
             <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
-          </div>
+          </header>
           <div class="finance-modal-body">
-            <form class="finance-form-grid finance-form-grid--2" @submit.prevent="onAddDividend">
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-div-holding">Holding</label>
-                <select
-                  id="modal-div-holding"
-                  v-model="dividendForm.holding_id"
-                  class="finance-input"
-                  required
-                >
-                  <option value="">Select holding</option>
-                  <option v-for="holding in holdings" :key="holding.id" :value="holding.id">
-                    {{ holding.name }}
-                  </option>
-                </select>
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Dividend details</h4>
+                  <p class="finance-modal-section__hint">Cash received from a holding.</p>
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-div-amount">Amount</label>
-                <input
-                  id="modal-div-amount"
-                  v-model="dividendForm.amount"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  required
-                />
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-div-holding">Holding</label>
+                  <FinanceSelect
+                    id="modal-div-holding"
+                    v-model="dividendForm.holding_id"
+                    :options="holdingSelectOptions"
+                    aria-label="Holding"
+                    placeholder="Select holding"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-div-amount">Amount</label>
+                  <FinanceMoneyInput
+                    id="modal-div-amount"
+                    v-model="dividendForm.amount"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-div-date">Paid on</label>
+                  <FinanceDateInput
+                    id="modal-div-date"
+                    v-model="dividendForm.paid_on"
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-div-note">Note</label>
+                  <input
+                    id="modal-div-note"
+                    v-model="dividendForm.note"
+                    class="finance-input"
+                    type="text"
+                    placeholder="Optional"
+                  />
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-div-date">Paid on</label>
-                <input
-                  id="modal-div-date"
-                  v-model="dividendForm.paid_on"
-                  class="finance-input"
-                  type="date"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-div-note">Note</label>
-                <input
-                  id="modal-div-note"
-                  v-model="dividendForm.note"
-                  class="finance-input"
-                  type="text"
-                  placeholder="Optional"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <button
-                  class="finance-primary-btn w-full"
-                  type="submit"
-                  :disabled="isBusy || !dividendForm.holding_id || !dividendForm.amount"
-                >
-                  Record dividend
-                </button>
-              </div>
-            </form>
+            </section>
           </div>
-        </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !dividendForm.holding_id || !dividendForm.amount"
+            >
+              Record dividend
+            </button>
+          </footer>
+        </form>
       </div>
 
       <!-- Create Goal -->
@@ -2103,9 +2566,15 @@ async function onCreateFromProposal(proposal) {
         class="finance-modal-backdrop"
         @click.self="closeModal"
       >
-        <div class="finance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-goal-title">
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-goal-title"
+          @submit.prevent="onCreateGoal"
+        >
           <div class="finance-modal-handle" aria-hidden="true"></div>
-          <div class="finance-modal-header">
+          <header class="finance-modal-header">
             <div>
               <p class="finance-kicker">Goals</p>
               <h2 id="modal-goal-title" class="finance-modal-title">New savings goal</h2>
@@ -2114,64 +2583,64 @@ async function onCreateFromProposal(proposal) {
             <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
-          </div>
+          </header>
           <div class="finance-modal-body">
-            <form class="finance-form-grid finance-form-grid--2" @submit.prevent="onCreateGoal">
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-goal-name">Goal name</label>
-                <input
-                  id="modal-goal-name"
-                  v-model="goalForm.name"
-                  class="finance-input"
-                  type="text"
-                  required
-                  placeholder="e.g. Emergency fund"
-                />
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Goal details</h4>
+                  <p class="finance-modal-section__hint">Target amount, starting balance, and optional due date.</p>
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-goal-target">Target amount</label>
-                <input
-                  id="modal-goal-target"
-                  v-model="goalForm.target_amount"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  required
-                />
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-goal-name">Goal name</label>
+                  <input
+                    id="modal-goal-name"
+                    v-model="goalForm.name"
+                    class="finance-input"
+                    type="text"
+                    required
+                    placeholder="e.g. Emergency fund"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-goal-target">Target amount</label>
+                  <FinanceMoneyInput
+                    id="modal-goal-target"
+                    v-model="goalForm.target_amount"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-goal-current">Starting amount</label>
+                  <FinanceMoneyInput
+                    id="modal-goal-current"
+                    v-model="goalForm.current_amount"
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-goal-due">Due date</label>
+                  <FinanceDateInput
+                    id="modal-goal-due"
+                    v-model="goalForm.due_on"
+                  />
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-goal-current">Starting amount</label>
-                <input
-                  id="modal-goal-current"
-                  v-model="goalForm.current_amount"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-goal-due">Due date</label>
-                <input
-                  id="modal-goal-due"
-                  v-model="goalForm.due_on"
-                  class="finance-input"
-                  type="date"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <button
-                  class="finance-primary-btn w-full"
-                  type="submit"
-                  :disabled="isBusy || !goalForm.name.trim() || !goalForm.target_amount"
-                >
-                  Create goal
-                </button>
-              </div>
-            </form>
+            </section>
           </div>
-        </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !goalForm.name.trim() || !goalForm.target_amount"
+            >
+              Create goal
+            </button>
+          </footer>
+        </form>
       </div>
 
       <!-- Add Debt -->
@@ -2180,9 +2649,15 @@ async function onCreateFromProposal(proposal) {
         class="finance-modal-backdrop"
         @click.self="closeModal"
       >
-        <div class="finance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-debt-title">
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-debt-title"
+          @submit.prevent="onCreateLiability"
+        >
           <div class="finance-modal-handle" aria-hidden="true"></div>
-          <div class="finance-modal-header">
+          <header class="finance-modal-header">
             <div>
               <p class="finance-kicker">Debts</p>
               <h2 id="modal-debt-title" class="finance-modal-title">Add debt</h2>
@@ -2191,65 +2666,68 @@ async function onCreateFromProposal(proposal) {
             <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
-          </div>
+          </header>
           <div class="finance-modal-body">
-            <form class="finance-form-grid finance-form-grid--2" @submit.prevent="onCreateLiability">
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-debt-name">Debt name</label>
-                <input
-                  id="modal-debt-name"
-                  v-model="liabilityForm.name"
-                  class="finance-input"
-                  type="text"
-                  required
-                  placeholder="e.g. Credit card"
-                />
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Debt details</h4>
+                  <p class="finance-modal-section__hint">Balance, APR, and minimum payment.</p>
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-debt-balance">Balance</label>
-                <input
-                  id="modal-debt-balance"
-                  v-model="liabilityForm.balance"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                />
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-debt-name">Debt name</label>
+                  <input
+                    id="modal-debt-name"
+                    v-model="liabilityForm.name"
+                    class="finance-input"
+                    type="text"
+                    required
+                    placeholder="e.g. Credit card"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-debt-balance">Balance</label>
+                  <FinanceMoneyInput
+                    id="modal-debt-balance"
+                    v-model="liabilityForm.balance"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-debt-apr">APR %</label>
+                  <input
+                    id="modal-debt-apr"
+                    v-model="liabilityForm.apr"
+                    class="finance-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputmode="decimal"
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-debt-min">Min payment</label>
+                  <FinanceMoneyInput
+                    id="modal-debt-min"
+                    v-model="liabilityForm.min_payment"
+                  />
+                </div>
               </div>
-              <div>
-                <label class="finance-label" for="modal-debt-apr">APR %</label>
-                <input
-                  id="modal-debt-apr"
-                  v-model="liabilityForm.apr"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <label class="finance-label" for="modal-debt-min">Min payment</label>
-                <input
-                  id="modal-debt-min"
-                  v-model="liabilityForm.min_payment"
-                  class="finance-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <button
-                  class="finance-primary-btn w-full"
-                  type="submit"
-                  :disabled="isBusy || !liabilityForm.name.trim()"
-                >
-                  Add debt
-                </button>
-              </div>
-            </form>
+            </section>
           </div>
-        </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !liabilityForm.name.trim()"
+            >
+              Add debt
+            </button>
+          </footer>
+        </form>
       </div>
     </Teleport>
   </div>

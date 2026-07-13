@@ -181,7 +181,7 @@ create table if not exists public.finance_holdings (
   name text not null check (char_length(trim(name)) > 0),
   symbol text,
   asset_class text not null default 'stock'
-    check (asset_class in ('stock', 'uitf', 'mutual_fund', 'crypto', 'time_deposit', 'other')),
+    check (asset_class in ('stock', 'uitf', 'mutual_fund', 'mp2', 'crypto', 'time_deposit', 'other')),
   currency text not null default 'PHP',
   notes text,
   created_at timestamptz not null default now(),

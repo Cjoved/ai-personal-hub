@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## App Purpose
 
-This project is a personal task list dashboard. Build features around user-owned tasks, status tracking, due dates, filtering, and clear dashboard summaries.
+This project is **Personal Hub** — one workspace with three systems: Personal Tasker (tasks/spaces/lists), Habit Tracker, and Personal Finance. Build features within the active system; keep shared auth/settings clean.
 
 ## Stack
 

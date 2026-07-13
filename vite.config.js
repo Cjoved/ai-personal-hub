@@ -15,9 +15,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'pwa-192.png', 'pwa-512.png'],
       manifest: {
-        name: 'Personal Tasker',
-        short_name: 'Tasker',
-        description: 'Personal task dashboard with spaces, lists, board, and calendar views.',
+        name: 'Personal Hub',
+        short_name: 'Hub',
+        description: 'Personal Hub — tasks, habits, and finance in one workspace.',
         theme_color: '#10b981',
         background_color: '#0f172a',
         display: 'standalone',

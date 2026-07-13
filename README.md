@@ -1,18 +1,30 @@
-# Personal Tasker
+# Personal Hub
 
-A personal task dashboard built with Vue 3, Vite, Tailwind CSS, Supabase, and Vercel. Organize tasks in **Spaces** and **Lists**, track them in **List** and **Board** views, see **today's tasks** on the home dashboard, and receive **four daily Telegram reminders** (plus optional AI digests) scheduled by **Supabase pg_cron**.
+One personal workspace for **Tasks · Habits · Finance**, built with Vue 3, Vite, Tailwind CSS, Supabase, and Vercel. Switch systems from the hub picker: run **Personal Tasker** for spaces and daily work, **Habit Tracker** for routines and streaks, and **Personal Finance** for cashflow, budgets, and net worth.
+
+Beyond the dashboards, Personal Hub is an **AI-assisted productivity product**: a multi-provider LLM failover chain, tool-calling agents with human-in-the-loop writes, usage metering, and module-specific assistants for tasks, habits, and finance — plus **Telegram reminders** scheduled via **Supabase pg_cron**.
 
 ## Features
 
+### Personal Tasker
 - Spaces, lists, subtasks, tags, due dates, reminders, and recurrence
-- List and kanban board views per list; **today panel** on the home dashboard
+- List and kanban board views; **today panel** on the home dashboard
 - Home and per-space dashboards with charts
-- **AI scheduler** — preview suggested due dates, confirm before applying
-- **Task assistant** — text or voice chat; clarify → confirm → execute for writes; ephemeral session (no DB history)
-- Filters (including archived), search, quick add, and keyboard shortcuts
-- Undo delete, settings (timezone, Telegram, AI digest), and dark mode
-- **4× daily Telegram reminders** (5 AM, 12 PM, 5 PM, 10 PM Philippines) via Supabase pg_cron
+- **AI task assistant** (text or voice) with tool calling and confirm-before-write
+- **AI scheduler** that suggests due dates for open work (preview → apply)
+- Filters, search, quick add, keyboard shortcuts, undo delete, dark mode
+- **4× daily Telegram reminders** (5 AM, 12 PM, 5 PM, 10 PM Philippines)
+- Optional **AI Telegram digest** with fixed-template fallback
 - **Monthly cleanup** of done tasks from the previous calendar month
+
+### Habit Tracker
+- Daily check-ins, streaks, categories, and insights
+- **Habit AI**: natural-language logging, recommendations, sentiment, and coaching
+
+### Personal Finance
+- Accounts, transactions, category limits, recurring items, and goals
+- Net worth overview with investments (including MP2) and debts
+- **Finance AI**: NL expense logging, auto-categorize, insights flags, and coaching (₱ / PH context)
 
 ## Stack
 
@@ -23,7 +35,89 @@ A personal task dashboard built with Vue 3, Vite, Tailwind CSS, Supabase, and Ve
 | Hosting | Vercel (static app + serverless API routes) |
 | Schedulers | Supabase **pg_cron** + **pg_net** (0 Vercel crons on Hobby) |
 | Notifications | Telegram Bot API |
-| AI | Gemini → OpenRouter → Groq → Cerebras → NVIDIA → Mistral (fixed template fallback for Telegram) |
+| AI | Gemini → OpenRouter → Groq → Cerebras → NVIDIA → Mistral (template fallback for Telegram) |
+| AI contracts | OpenAI-compatible tool calling, Zod schemas, signed pending writes |
+
+---
+
+## AI architecture (portfolio highlight)
+
+This section is written for portfolio / hiring reviewers: what was built, why, and where it lives in the repo.
+
+### Problem
+
+Personal apps get noisy fast. Typing every task update, habit check-in, or expense is friction. A thin “chat with GPT” wrapper is not enough — writes must be **safe**, providers must be **cheap and resilient**, and usage must be **capped** on free tiers.
+
+### What I built
+
+| Capability | What it does |
+|------------|--------------|
+| **Provider failover chain** | Tries Gemini → OpenRouter → Groq → Cerebras → NVIDIA → Mistral until one succeeds; skips missing keys and rate limits |
+| **Tool-calling task agent** | LLM selects typed tools (`list_tasks`, `create_task`, `suggest_schedule`, …) against live workspace context |
+| **Human-in-the-loop writes** | Read tools run immediately; write/destructive tools return a **preview** and require **Execute** |
+| **Signed pending actions** | Pending writes are HMAC-signed (`AI_PENDING_SECRET`) so the client cannot forge tool args |
+| **Zod tool contracts** | Every tool argument set is validated before execution |
+| **Usage metering** | Per-provider monthly counters in `ai_usage` + daily chat cap (`AI_DAILY_CHAT_LIMIT`) |
+| **Cross-module AI** | Separate Vercel routes for Tasker, Habits, and Finance (not one generic chatbot) |
+| **Graceful degradation** | Telegram digests fall back to a fixed template when AI keys/limits fail |
+
+### Agent flow (Tasker assistant)
+
+```text
+User (text / voice)
+    → POST /api/ai/chat
+        → auth + daily usage gate
+        → workspace context (spaces, lists, open tasks, timezone)
+        → provider chain (tools: auto)
+        → agent loop:
+              read tool  → execute → compose reply
+              write tool → preview + signed pending action
+    → UI shows reply (+ Execute / Cancel)
+    → POST /api/ai/apply  (verified signature → toolExecutor write)
+```
+
+### Module AI surface
+
+| Module | Endpoints | Behaviors |
+|--------|-----------|-----------|
+| **Tasker** | `/api/ai/chat`, `/api/ai/apply`, `/api/ai/schedule` | Conversational CRUD via tools; schedule JSON suggestions; confirm-to-apply |
+| **Habits** | `/api/ai/habits/log`, `recommend`, `coach`, `sentiment` | NL check-in parsing, suggestions, coaching copy, mood/sentiment signals |
+| **Finance** | `/api/ai/finance/log`, `categorize`, `insights`, `coach` | NL expense → structured fields; category hints; JSON insight flags; PH ₱ coaching |
+| **Reminders** | `/api/cron/task-reminder` | Optional AI digest over overdue/due-today; else fixed template |
+
+### Reliability & cost controls
+
+- **OpenAI-compatible** HTTP to every provider — one client path, many backends
+- **Monthly per-provider limits** via env (`AI_GEMINI_MONTHLY_LIMIT`, …) so free-tier quotas do not silently burn
+- **Daily assistant cap** so chat cannot runaway-loop on a bad prompt
+- **No browser secrets** — only `VITE_*` public config in the client; LLM keys stay on Vercel serverless
+- **RLS + `requireUser`** on AI routes — agents only see the authenticated user’s rows
+
+### Key source files
+
+```text
+lib/server/ai/
+  providerChain.js    # Failover + OpenAI-compatible chat/completions
+  agentLoop.js        # Read / confirm / chat phases
+  toolSchemas.js      # Zod + OpenAI tool definitions
+  toolExecutor.js     # Safe execution against Supabase
+  pendingAction.js    # Sign / verify write intents
+  usage.js            # Monthly + daily metering
+  assistantTools.js   # System prompt + workspace context
+
+api/ai/
+  chat.js, apply.js, schedule.js
+  habits/{log,recommend,coach,sentiment}.js
+  finance/{log,categorize,insights,coach}.js
+```
+
+### Skills this demonstrates
+
+- Production LLM integration beyond a single SDK demo
+- Agent design with **tool contracts**, previews, and signed confirmations
+- Multi-tenant-safe data access (Supabase RLS + server auth)
+- Cost/ops engineering for free-tier model APIs
+- Productizing AI across three domains (tasks, habits, finance) with shared infra
 
 ---
 
@@ -86,11 +180,18 @@ Migrations live in `supabase/migrations/`. Run them **in order**:
 | `0007_monthly_cleanup_index.sql` | Index for monthly done-task cleanup |
 | `0008_user_settings_and_ai_usage.sql` | `user_settings`, `ai_usage` tables + RLS |
 | `0009_pg_cron_schedules.sql` | 4 reminder crons, monthly cleanup, log purge |
+| `0010_invoke_task_reminder_timeout.sql` | Reminder invoke timeout tuning |
+| `0011_create_goals.sql` | Tasker goals |
+| `0012_create_personal_trackers.sql` | Shared tracker scaffolding |
+| `0013_habit_tracker_full.sql` | Habit Tracker tables + RLS |
+| `0014_personal_finance_full.sql` | Finance accounts, transactions, holdings, debts, goals + RLS |
+| `0015_budget_category_icons.sql` | Category icon column |
+| `0016_finance_holding_mp2.sql` | MP2 asset class for holdings |
 
 ### Option A — Supabase SQL Editor (simplest)
 
 1. In the Supabase dashboard, open **SQL Editor**.
-2. For each file above (0001 → 0009), open the file locally, copy the full SQL, paste into a new query, and click **Run**.
+2. For each file above (0001 → 0016), open the file locally, copy the full SQL, paste into a new query, and click **Run**.
 3. Confirm there are no errors before running the next file.
 
 ### Option B — Supabase CLI
@@ -487,7 +588,7 @@ The assistant tries providers **in order** until one succeeds. Usage is tracked 
 
 ### Tasks do not load / permission errors
 
-- Confirm all migrations (0001–0009) ran successfully.
+- Confirm all migrations (0001–0016) ran successfully.
 - In Supabase **Logs → Postgres**, check for RLS or policy errors.
 
 ### Telegram reminder returns 401
@@ -530,13 +631,16 @@ The assistant tries providers **in order** until one succeeds. Usage is tracked 
 ```
 tasker/
 ├── api/
-│   ├── cron/task-reminder.js    # Telegram reminders (called by pg_cron)
-│   └── ai/chat.js, apply.js, schedule.js  # Assistant, confirmed writes, scheduler
-├── lib/server/ai/               # Provider chain, tools, agent loop, usage caps
-├── src/                         # Vue app
-├── supabase/migrations/         # SQL schema (run in order)
-├── vercel.json                  # Rewrites, headers (no crons)
-└── .env.example                 # Environment template
+│   ├── cron/task-reminder.js       # Telegram reminders (pg_cron → HTTP)
+│   └── ai/
+│       ├── chat.js, apply.js, schedule.js
+│       ├── habits/                 # log, recommend, coach, sentiment
+│       └── finance/                # log, categorize, insights, coach
+├── lib/server/ai/                  # Provider chain, agent loop, tools, usage caps
+├── src/                            # Vue app (assistants + FAB UIs)
+├── supabase/migrations/            # SQL schema incl. ai_usage (0008+)
+├── vercel.json                     # Rewrites, headers (no Vercel crons)
+└── .env.example                    # Env template (AI keys optional)
 ```
 
 ---

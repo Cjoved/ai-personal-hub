@@ -670,7 +670,7 @@ button {
   color: rgb(241 245 249);
 }
 
-.app-logo__title-tasker {
+.app-logo__title-hub {
   background: linear-gradient(90deg, #3b82f6, #4f46e5, #7c3aed);
   -webkit-background-clip: text;
   background-clip: text;
@@ -7062,8 +7062,20 @@ button {
   box-shadow: 0 12px 28px rgb(30 64 175 / 0.35);
 }
 
+html:not(.dark) .finance-ai-fab {
+  border: 1px solid color-mix(in srgb, #1e40af 35%, white);
+  box-shadow:
+    0 14px 32px rgb(30 64 175 / 0.28),
+    0 0 0 4px rgb(37 99 235 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+
 .finance-ai-fab:hover {
   transform: scale(1.05);
+}
+
+html:not(.dark) .finance-ai-fab:hover {
+  filter: brightness(1.04);
 }
 
 .finance-ai-layer {
@@ -8059,7 +8071,7 @@ button {
   }
 }
 
-/* Task datetime picker (Personal Tasker palette) */
+/* Task datetime picker (Personal Hub / Tasker palette) */
 .task-datetime {
   position: relative;
   width: 100%;

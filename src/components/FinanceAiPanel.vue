@@ -172,9 +172,9 @@ defineExpose({ open, close })
       aria-label="Open Finance AI"
       @click="open"
     >
-      <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-        <circle cx="12" cy="12" r="4" />
+      <svg class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 2.5 13.2 8.2 18.5 7l-3.8 4.2L19 15.5l-5.4-.4L12 21l-1.6-5.9-5.4.4 4.3-4.3L5.5 7l5.3 1.2L12 2.5Z" />
+        <circle cx="12" cy="12" r="2.4" fill="white" fill-opacity="0.95" />
       </svg>
     </button>
 

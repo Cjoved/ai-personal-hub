@@ -51,7 +51,7 @@ const systems = [
         <div>
           <AppLogo variant="sidebar" :show-tagline="false" />
           <p class="type-body-sm mt-3 text-slate-400">
-            Choose a system. Each one has its own navigation.
+            Personal Hub — choose a system. Each one has its own navigation.
           </p>
         </div>
         <button

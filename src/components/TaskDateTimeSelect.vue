@@ -209,18 +209,41 @@ function clearValue() {
 
 async function updateMenuPosition() {
   if (!buttonRef.value || !isOpen.value) return
+
+  await nextTick()
+  const isMobile = window.matchMedia('(max-width: 767px)').matches
+
+  // Mobile: center sheet so calendar/time stays fully visible inside the viewport
+  if (isMobile) {
+    const width = Math.min(22.5 * 16, window.innerWidth - 24)
+    menuStyle.value = {
+      left: '50%',
+      top: '50%',
+      width: `${width}px`,
+      maxHeight: 'min(88dvh, 36rem)',
+      transform: 'translate(-50%, -50%)',
+      overflowY: 'auto',
+    }
+    return
+  }
+
   const rect = buttonRef.value.getBoundingClientRect()
   const menuHeight = menuRef.value?.offsetHeight || 420
   const menuWidth = Math.min(Math.max(rect.width, 340), window.innerWidth - 16)
-  const spaceBelow = window.innerHeight - rect.bottom
-  const openUpward = spaceBelow < menuHeight + 12 && rect.top > spaceBelow
-  const left = Math.min(Math.max(8, rect.left), window.innerWidth - menuWidth - 8)
+  const pad = 8
+  const spaceBelow = window.innerHeight - rect.bottom - pad
+  const spaceAbove = rect.top - pad
+  const openUpward = spaceBelow < menuHeight + 12 && spaceAbove > spaceBelow
+  const left = Math.min(Math.max(pad, rect.left), window.innerWidth - menuWidth - pad)
+  const available = openUpward ? spaceAbove - 6 : spaceBelow - 6
 
   menuStyle.value = {
     left: `${left}px`,
     width: `${menuWidth}px`,
     top: openUpward ? `${rect.top - 6}px` : `${rect.bottom + 4}px`,
     transform: openUpward ? 'translateY(-100%)' : 'none',
+    maxHeight: `${Math.max(240, Math.min(menuHeight, available))}px`,
+    overflowY: 'auto',
   }
 }
 
@@ -251,6 +274,7 @@ async function toggleMenu() {
 }
 
 function handleClickOutside(event) {
+  if (!isOpen.value) return
   if (root.value?.contains(event.target) || menuRef.value?.contains(event.target)) return
   isOpen.value = false
 }

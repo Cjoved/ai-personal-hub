@@ -218,17 +218,17 @@ async function onSubtaskDrop(targetId) {
 
             <section class="task-editor-section">
               <p class="task-editor-section-title">Details</p>
-              <div class="task-editor-grid" :class="isCreate ? 'sm:grid-cols-1' : 'sm:grid-cols-2'">
+              <div class="task-editor-grid grid-cols-2">
                 <div v-if="!isCreate" class="task-editor-field">
                   <label class="task-editor-label">Status</label>
                   <AppSelect v-model="form.status" :options="statusOptions" :option-tone="(value) => statusTone[value]" size="sm" block />
                 </div>
-                <div class="task-editor-field">
+                <div class="task-editor-field" :class="isCreate ? 'col-span-2 sm:col-span-1' : ''">
                   <label class="task-editor-label">Priority</label>
                   <AppSelect v-model="form.priority" :options="priorityOptions" :option-tone="(value) => priorityTone[value]" size="sm" block />
                 </div>
               </div>
-              <div class="task-editor-grid sm:grid-cols-2">
+              <div class="task-editor-grid grid-cols-2">
                 <div class="task-editor-field">
                   <label class="task-editor-label">Space</label>
                   <AppSelect v-model="form.space_id" :options="spaceOptions" size="sm" block @change="handleSpaceChange" />
@@ -238,7 +238,7 @@ async function onSubtaskDrop(targetId) {
                   <AppSelect v-model="form.list_id" :options="listOptions" size="sm" block />
                 </div>
               </div>
-              <div class="task-editor-grid sm:grid-cols-2">
+              <div class="task-editor-grid grid-cols-2">
                 <div class="task-editor-field">
                   <label class="task-editor-label" for="edit-tags">Tags</label>
                   <input id="edit-tags" v-model="form.tags" class="task-editor-input" placeholder="work, urgent" />
@@ -276,7 +276,7 @@ async function onSubtaskDrop(targetId) {
                 <label class="task-editor-label" for="edit-estimate">Estimate (min)</label>
                 <input id="edit-estimate" v-model="form.estimated_minutes" class="task-editor-input" type="number" min="0" placeholder="0" />
               </div>
-              <div class="task-editor-grid" :class="form.recurrence_rule !== 'none' ? 'sm:grid-cols-2' : 'sm:grid-cols-1'">
+              <div class="task-editor-grid" :class="form.recurrence_rule !== 'none' ? 'grid-cols-2' : 'grid-cols-1'">
                 <div class="task-editor-field">
                   <label class="task-editor-label">Recurrence</label>
                   <AppSelect v-model="form.recurrence_rule" :options="recurrenceOptions" size="sm" block />

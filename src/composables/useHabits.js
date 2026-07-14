@@ -238,25 +238,36 @@ export function monthHeat(habit, checkSet, monthDate = new Date(), checksByHabit
   return cells
 }
 
-/** GitHub-style rolling heatmap (weeks as columns). */
-export function contributionHeat(habit, checkSet, days = 119, todayKey = localDateKey(), checksByHabit = null) {
-  const start = shiftDateKey(todayKey, -(days - 1))
-  const startDate = parseLocalDate(start)
-  startDate.setDate(startDate.getDate() - startDate.getDay())
-  const gridStart = localDateKey(startDate)
-  const cells = []
-  let cursor = gridStart
-  while (cursor <= todayKey) {
-    const due = isHabitDueOn(habit, cursor, checksByHabit)
-    cells.push({
-      key: cursor,
-      due,
-      checked: checkSet.has(cursor),
-      weekday: parseLocalDate(cursor).getDay(),
-    })
-    cursor = shiftDateKey(cursor, 1)
+/** Completion rate for a habit within a YYYY-MM month (through today if current month). */
+export function monthCompletionForHabit(
+  habit,
+  checkSet,
+  monthKey,
+  todayKey = localDateKey(),
+  checksByHabit = null,
+) {
+  if (!habit || !monthKey) return { due: 0, done: 0, pct: 0 }
+  const [year, month] = monthKey.split('-').map(Number)
+  const cells = monthHeat(habit, checkSet, new Date(year, month - 1, 1), checksByHabit)
+  const endKey =
+    monthKey === String(todayKey).slice(0, 7)
+      ? todayKey
+      : localDateKey(new Date(year, month, 0))
+
+  let due = 0
+  let done = 0
+  for (const cell of cells) {
+    if (cell.key > endKey) continue
+    if (!cell.due) continue
+    due += 1
+    if (cell.checked) done += 1
   }
-  return cells
+
+  return {
+    due,
+    done,
+    pct: due ? Math.round((done / due) * 100) : 0,
+  }
 }
 
 export function weeklyCompletionSeries(habits, checksByHabit, weeks = 8, todayKey = localDateKey()) {
@@ -564,12 +575,6 @@ export function useHabits(user) {
     const set = checksByHabit.value.get(focusHabit.value.id) || new Set()
     const [year, month] = heatMonth.value.split('-').map(Number)
     return monthHeat(focusHabit.value, set, new Date(year, month - 1, 1), checksByHabit.value)
-  })
-
-  const contributionCells = computed(() => {
-    if (!focusHabit.value) return []
-    const set = checksByHabit.value.get(focusHabit.value.id) || new Set()
-    return contributionHeat(focusHabit.value, set, 119, todayKey.value, checksByHabit.value)
   })
 
   const historySeries = computed(() =>
@@ -1083,7 +1088,6 @@ export function useHabits(user) {
     focusHabit,
     habitRows,
     heatCells,
-    contributionCells,
     historySeries,
     monthlySeries,
     anomalies,

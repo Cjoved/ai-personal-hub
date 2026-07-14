@@ -308,9 +308,9 @@ function toggleSubtaskDone(subtask, isChecked) {
                   </td>
 
                   <td class="max-w-[360px] px-4 py-3.5 align-middle">
-                    <button class="block w-full text-left" type="button" @click="emit('edit-task', task)">
-                      <span class="flex min-w-0 items-center gap-2">
-                        <span class="type-task-title truncate text-slate-950 dark:text-slate-100">{{ task.title }}</span>
+                    <button class="block w-full min-w-0 text-left" type="button" @click="emit('edit-task', task)">
+                      <span class="flex min-w-0 flex-wrap items-center gap-2">
+                        <span class="type-task-title min-w-0 text-slate-950 dark:text-slate-100 md:truncate">{{ task.title }}</span>
                         <span
                           v-if="task.subtaskCount"
                           class="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-600 ring-1 ring-indigo-100"
@@ -326,6 +326,7 @@ function toggleSubtaskDone(subtask, isChecked) {
 
                   <td class="px-4 py-3.5 align-middle" data-label="Status">
                     <AppSelect
+                      block
                       :model-value="task.status"
                       :options="statusOptions"
                       :option-tone="statusTone"
@@ -342,6 +343,7 @@ function toggleSubtaskDone(subtask, isChecked) {
 
                   <td class="px-4 py-3.5 align-middle" data-label="Priority">
                     <AppSelect
+                      block
                       :model-value="task.priority"
                       :options="priorityOptions"
                       :option-tone="priorityTone"
@@ -427,14 +429,14 @@ function toggleSubtaskDone(subtask, isChecked) {
                         :key="subtask.id"
                         class="neon-subtask-row grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 transition"
                       >
-                        <label class="flex min-w-0 items-center gap-3 text-sm font-medium text-slate-700">
+                        <label class="flex min-w-0 items-center gap-2.5 text-sm font-medium text-slate-700 dark:text-slate-200">
                           <input
-                            class="h-4 w-4 rounded border-slate-300 text-emerald-600"
+                            class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600"
                             type="checkbox"
                             :checked="subtask.status === 'done'"
                             @change="toggleSubtaskDone(subtask, $event.target.checked)"
                           />
-                          <span class="truncate" :class="subtask.status === 'done' ? 'text-slate-400 line-through' : ''">
+                          <span class="min-w-0" :class="subtask.status === 'done' ? 'text-slate-400 line-through' : ''">
                             {{ subtask.title }}
                           </span>
                         </label>
@@ -448,7 +450,7 @@ function toggleSubtaskDone(subtask, isChecked) {
                         />
 
                         <button
-                          class="grid h-7 w-7 place-items-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
+                          class="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100"
                           type="button"
                           title="Delete subtask"
                           aria-label="Delete subtask"

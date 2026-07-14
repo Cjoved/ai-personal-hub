@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import AppSelect from './AppSelect.vue'
 import GoalMotivationStrip from './GoalMotivationStrip.vue'
 import QuickAddTask from './QuickAddTask.vue'
 import TaskFilterMenu from './TaskFilterMenu.vue'
@@ -103,6 +104,11 @@ const contextLabel = computed(() => {
 })
 
 const userInitial = computed(() => props.userEmail?.charAt(0)?.toUpperCase() || 'U')
+
+const tagOptions = computed(() => [
+  { value: '', label: 'All tags' },
+  ...props.allTags.map((tag) => ({ value: tag, label: tag })),
+])
 
 function focusSearch() {
   searchInputRef.value?.focus()
@@ -218,15 +224,15 @@ defineExpose({ focusSearch })
         @update:model-value="emit('update:selectedFilter', $event)"
       />
 
-      <select
+      <AppSelect
         v-if="activeList && allTags.length"
-        class="type-input rounded-xl border border-slate-200/90 bg-white/90 px-2.5 py-2 text-sm dark:border-slate-600 dark:bg-slate-900/60"
-        :value="selectedTag"
-        @change="emit('update:selectedTag', $event.target.value)"
-      >
-        <option value="">All tags</option>
-        <option v-for="tag in allTags" :key="tag" :value="tag">{{ tag }}</option>
-      </select>
+        class="workspace-tag-select min-w-[9.5rem] shrink-0"
+        :model-value="selectedTag"
+        :options="tagOptions"
+        size="sm"
+        aria-label="Filter by tag"
+        @update:model-value="emit('update:selectedTag', $event)"
+      />
 
       <button
         class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-violet-200/90 bg-violet-50 px-3 text-sm font-bold text-violet-700 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-200"

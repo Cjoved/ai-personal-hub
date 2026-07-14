@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, toRef, watch } from 'vue'
 import HabitAiPanel from './HabitAiPanel.vue'
 import LiveTrendChart from './LiveTrendChart.vue'
-import { formatReminderTime, frequencyLabel } from '../composables/useHabits'
+import { formatReminderTime, frequencyLabel, monthCompletionForHabit } from '../composables/useHabits'
 import { useHabitNotifications } from '../composables/useHabitNotifications'
 import { supabase } from '../lib/supabase'
 
@@ -30,7 +30,8 @@ const focusHabitId = toRef(props.api, 'focusHabitId')
 const focusHabit = toRef(props.api, 'focusHabit')
 const heatMonth = toRef(props.api, 'heatMonth')
 const heatCells = toRef(props.api, 'heatCells')
-const contributionCells = toRef(props.api, 'contributionCells')
+const checksByHabit = toRef(props.api, 'checksByHabit')
+const todayKey = toRef(props.api, 'todayKey')
 const historySeries = toRef(props.api, 'historySeries')
 const monthlySeries = toRef(props.api, 'monthlySeries')
 const anomalies = toRef(props.api, 'anomalies')
@@ -87,6 +88,43 @@ const heatMonthLabel = computed(() => {
   return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(year, month - 1, 1))
 })
 
+const monthRanking = computed(() => {
+  const month = String(heatMonth.value || '').slice(0, 7)
+  const today = todayKey.value || ''
+  const map = checksByHabit.value
+  return [...(habitRows.value || [])]
+    .map((row) => {
+      const set = map?.get?.(row.habit.id) || new Set()
+      const stats = monthCompletionForHabit(row.habit, set, month, today, map)
+      return {
+        id: row.habit.id,
+        title: row.habit.title,
+        color: row.category?.color || '#0d9488',
+        due: stats.due,
+        done: stats.done,
+        pct: stats.pct,
+        streak: row.streaks?.current || 0,
+      }
+    })
+    .filter((item) => item.due > 0)
+    .sort((a, b) => b.pct - a.pct || b.done - a.done || a.title.localeCompare(b.title))
+})
+
+const atRiskInsights = computed(() =>
+  [...(habitRows.value || [])]
+    .filter((row) => row.atRisk || (row.risk || 0) >= 0.45)
+    .sort((a, b) => (b.risk || 0) - (a.risk || 0) || a.habit.title.localeCompare(b.habit.title))
+    .slice(0, 6)
+    .map((row) => ({
+      id: row.habit.id,
+      title: row.habit.title,
+      risk: Math.round((row.risk || 0) * 100),
+      streak: row.streaks?.current || 0,
+      dueToday: row.dueToday,
+      checkedToday: row.checkedToday,
+    })),
+)
+
 const longestStreak = computed(() =>
   Math.max(0, ...(habitRows.value || []).map((row) => row.streaks?.best || 0)),
 )
@@ -125,15 +163,6 @@ const categoryCards = computed(() => {
   }))
   const uncategorized = rows.filter((habit) => !habit.category_id).length
   return { cards, uncategorized }
-})
-
-const contributionWeeks = computed(() => {
-  const cells = contributionCells.value || []
-  const weeks = []
-  for (let i = 0; i < cells.length; i += 7) {
-    weeks.push(cells.slice(i, i + 7))
-  }
-  return weeks
 })
 
 async function onToggle(row) {
@@ -287,32 +316,35 @@ watch(
 
     <!-- TODAY -->
     <template v-else-if="showToday">
-      <header class="habits-hero rounded-3xl p-5 sm:p-6">
-        <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div class="min-w-0">
+      <header class="habits-hero habits-hero--today rounded-3xl p-5 sm:p-6">
+        <div class="habits-hero-today-grid">
+          <div class="habits-hero-today-copy min-w-0">
             <p class="habits-kicker">Today’s check-ins</p>
             <h2 class="habits-hero-title mt-1">{{ todayLabel }}</h2>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+            <p class="habits-hero-sub mt-2 text-sm text-slate-600 dark:text-slate-300">
               {{ dueTodayCount ? `${checkedDueCount} of ${dueTodayCount} habits checked in` : 'No habits scheduled today — add one to start a streak.' }}
             </p>
-            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+            <div class="habits-hero-today-chips mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
               <span class="habits-chip habits-chip--tiny">Lv {{ progress?.level || 1 }} · {{ progress?.xp || 0 }} XP</span>
               <span class="habits-chip habits-chip--tiny">{{ progress?.freeze_tokens ?? 0 }} freezes</span>
               <span v-if="offlinePending" class="habits-chip habits-chip--tiny habits-chip--warn">{{ offlinePending }} offline pending</span>
             </div>
           </div>
 
-          <div class="flex items-center gap-4">
+          <div class="habits-hero-today-actions">
             <div class="habits-progress-ring" :style="ringStyle" aria-hidden="true">
               <div class="habits-progress-ring__hole">
                 <strong class="tabular-nums">{{ dayProgressPct }}%</strong>
                 <span>done</span>
               </div>
             </div>
-            <div class="flex flex-col gap-2">
-              <button class="habits-primary-btn" type="button" @click="emit('create-habit')">New habit</button>
+            <div class="habits-hero-today-btns">
+              <button class="habits-primary-btn" type="button" @click="emit('create-habit')">
+                <span class="habits-primary-btn__full">New habit</span>
+                <span class="habits-primary-btn__short" aria-hidden="true">+ New</span>
+              </button>
               <button
-                class="habits-action-btn mx-auto"
+                class="habits-action-btn"
                 type="button"
                 :data-tooltip="notifyPermission === 'granted' ? 'Reminders enabled' : 'Enable reminders'"
                 :aria-label="notifyPermission === 'granted' ? 'Reminders enabled' : 'Enable reminders'"
@@ -375,7 +407,7 @@ watch(
         </button>
       </div>
 
-      <div v-else class="space-y-3">
+      <div v-else class="space-y-3 habit-today-list">
         <article
           v-for="row in sortedRows"
           :key="row.habit.id"
@@ -387,7 +419,7 @@ watch(
           }"
           @click="focusHabitId = row.habit.id"
         >
-          <div class="flex items-start gap-3">
+          <div class="habit-row-main flex items-start gap-3">
             <button
               class="habit-check-circle"
               :class="{
@@ -405,106 +437,111 @@ watch(
               </svg>
             </button>
 
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <strong class="text-base font-extrabold text-slate-950 dark:text-slate-50">{{ row.habit.title }}</strong>
-                <span
-                  v-if="row.category"
-                  class="habits-chip habits-chip--tiny"
-                  :style="{ background: `${row.category.color}22`, color: row.category.color, borderColor: `${row.category.color}44` }"
-                >
-                  {{ row.category.name }}
-                </span>
-                <span v-if="row.reminderDue" class="habits-chip habits-chip--tiny habits-chip--warn">Reminder due</span>
-                <span v-if="row.atRisk" class="habits-chip habits-chip--tiny habits-chip--warn">At risk</span>
-                <span v-if="row.stackParent" class="habits-chip habits-chip--tiny">
-                  After {{ row.stackParent.title }}{{ row.stackUnlocked ? '' : ' (locked)' }}
-                </span>
-              </div>
-              <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                {{ frequencyLabel(row.habit) }}
-                <span v-if="row.habit.habit_type === 'quantity'"> · Target {{ row.habit.target_value }} {{ row.habit.unit || '' }}</span>
-                <span v-else-if="row.habit.habit_type === 'duration'"> · {{ row.habit.target_value }} {{ row.habit.unit || 'mins' }}</span>
-                <span v-if="row.habit.reminder_time"> · Reminder {{ formatReminderTime(row.habit.reminder_time) }}</span>
-                <span v-if="!row.dueToday"> · Not due today</span>
-                <span v-else-if="row.checkedToday"> · Checked in</span>
-                <span v-else> · Due today</span>
-              </p>
+            <div class="habit-row-body min-w-0 flex-1">
+              <div class="habit-row-top flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <strong class="habit-row-title text-base font-extrabold text-slate-950 dark:text-slate-50">{{ row.habit.title }}</strong>
+                    <span
+                      v-if="row.category"
+                      class="habits-chip habits-chip--tiny"
+                      :style="{ background: `${row.category.color}22`, color: row.category.color, borderColor: `${row.category.color}44` }"
+                    >
+                      {{ row.category.name }}
+                    </span>
+                    <span v-if="row.reminderDue" class="habits-chip habits-chip--tiny habits-chip--warn">Reminder due</span>
+                    <span v-if="row.atRisk" class="habits-chip habits-chip--tiny habits-chip--warn">At risk</span>
+                    <span v-if="row.stackParent" class="habits-chip habits-chip--tiny">
+                      After {{ row.stackParent.title }}{{ row.stackUnlocked ? '' : ' (locked)' }}
+                    </span>
+                  </div>
+                  <p class="habit-row-meta mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {{ frequencyLabel(row.habit) }}
+                    <span v-if="row.habit.habit_type === 'quantity'"> · Target {{ row.habit.target_value }} {{ row.habit.unit || '' }}</span>
+                    <span v-else-if="row.habit.habit_type === 'duration'"> · {{ row.habit.target_value }} {{ row.habit.unit || 'mins' }}</span>
+                    <span v-if="row.habit.reminder_time"> · Reminder {{ formatReminderTime(row.habit.reminder_time) }}</span>
+                    <span v-if="!row.dueToday"> · Not due today</span>
+                    <span v-else-if="row.checkedToday"> · Checked in</span>
+                    <span v-else> · Due today</span>
+                  </p>
+                </div>
 
-              <div class="habit-week-dots mt-3">
-                <span
-                  v-for="day in row.week"
-                  :key="day.key"
-                  class="habit-week-dot"
-                  :class="{
-                    'habit-week-dot--checked': day.checked,
-                    'habit-week-dot--today': day.isToday,
-                    'habit-week-dot--skip': !day.due,
-                  }"
-                  :title="day.key"
-                />
+                <div class="habit-streak-badge shrink-0" title="Current streak">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2c2 4 0 6 0 6s4-1 6 3c2 4-1 9-6 11-5-2-8-7-6-11 2-4 6-3 6-3s-2-2 0-6Z" />
+                  </svg>
+                  <span class="tabular-nums">{{ row.streaks.current }}</span>
+                  <small>day streak</small>
+                </div>
               </div>
-            </div>
 
-            <div class="flex shrink-0 flex-col items-end gap-2">
-              <div class="habit-streak-badge" title="Current streak">
-                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 2c2 4 0 6 0 6s4-1 6 3c2 4-1 9-6 11-5-2-8-7-6-11 2-4 6-3 6-3s-2-2 0-6Z" />
-                </svg>
-                <span class="tabular-nums">{{ row.streaks.current }}</span>
-                <small>day streak</small>
-              </div>
-              <div class="flex flex-wrap justify-end gap-1">
-                <button
-                  class="habits-action-btn"
-                  type="button"
-                  data-tooltip="Mood & journal"
-                  aria-label="Mood and journal"
-                  @click.stop="openLogPanel(row)"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                    <path d="M9 9h.01M15 9h.01" />
-                  </svg>
-                </button>
-                <button
-                  v-if="row.dueToday && !row.checkedToday"
-                  class="habits-action-btn"
-                  type="button"
-                  data-tooltip="Use streak freeze"
-                  aria-label="Use streak freeze"
-                  @click.stop="onFreeze(row.habit)"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M12 2v20M2 12h20M4.9 4.9l14.2 14.2M19.1 4.9 4.9 19.1" />
-                  </svg>
-                </button>
-                <button
-                  class="habits-action-btn"
-                  type="button"
-                  data-tooltip="Edit habit"
-                  aria-label="Edit habit"
-                  @click.stop="emit('edit-habit', row.habit)"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
-                </button>
-                <button
-                  class="habits-action-btn habits-action-btn--danger"
-                  type="button"
-                  data-tooltip="Archive"
-                  aria-label="Archive habit"
-                  @click.stop="onArchive(row.habit)"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M3 6h18" />
-                    <path d="M8 6V4h8v2" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                  </svg>
-                </button>
+              <div class="habit-row-footer mt-3 flex flex-wrap items-center justify-between gap-2">
+                <div class="habit-week-dots">
+                  <span
+                    v-for="day in row.week"
+                    :key="day.key"
+                    class="habit-week-dot"
+                    :class="{
+                      'habit-week-dot--checked': day.checked,
+                      'habit-week-dot--today': day.isToday,
+                      'habit-week-dot--skip': !day.due,
+                    }"
+                    :title="day.key"
+                  />
+                </div>
+
+                <div class="habit-row-actions flex flex-wrap justify-end gap-1">
+                  <button
+                    class="habits-action-btn"
+                    type="button"
+                    data-tooltip="Mood & journal"
+                    aria-label="Mood and journal"
+                    @click.stop="openLogPanel(row)"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                      <path d="M9 9h.01M15 9h.01" />
+                    </svg>
+                  </button>
+                  <button
+                    v-if="row.dueToday && !row.checkedToday"
+                    class="habits-action-btn"
+                    type="button"
+                    data-tooltip="Use streak freeze"
+                    aria-label="Use streak freeze"
+                    @click.stop="onFreeze(row.habit)"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M12 2v20M2 12h20M4.9 4.9l14.2 14.2M19.1 4.9 4.9 19.1" />
+                    </svg>
+                  </button>
+                  <button
+                    class="habits-action-btn"
+                    type="button"
+                    data-tooltip="Edit habit"
+                    aria-label="Edit habit"
+                    @click.stop="emit('edit-habit', row.habit)"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </button>
+                  <button
+                    class="habits-action-btn habits-action-btn--danger"
+                    type="button"
+                    data-tooltip="Archive"
+                    aria-label="Archive habit"
+                    @click.stop="onArchive(row.habit)"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -514,12 +551,13 @@ watch(
 
     <!-- INSIGHTS -->
     <template v-else-if="showInsights">
-      <header class="habits-hero rounded-3xl p-5 sm:p-6">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+      <div class="habits-insights space-y-5">
+      <header class="habits-hero habits-hero--insights rounded-3xl p-5 sm:p-6">
+        <div class="habits-insights-hero-inner flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div class="min-w-0">
             <p class="habits-kicker">Consistency</p>
             <h2 class="habits-hero-title mt-1">Insights</h2>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+            <p class="habits-hero-sub mt-2 text-sm text-slate-600 dark:text-slate-300">
               Heatmap, trends, mood correlation, and anomaly flags.
             </p>
           </div>
@@ -560,7 +598,7 @@ watch(
       </div>
 
       <template v-else>
-        <div class="grid gap-3 sm:grid-cols-4">
+        <div class="habits-insights-stats grid grid-cols-2 gap-3 sm:grid-cols-4">
           <article class="habits-stat-card habits-stat-card--streak rounded-2xl p-4">
             <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Longest streak</p>
             <p class="mt-1 text-3xl font-black tabular-nums text-amber-700 dark:text-amber-300">{{ longestStreak }}</p>
@@ -594,126 +632,171 @@ watch(
           </ul>
         </article>
 
-        <div class="grid gap-4 lg:grid-cols-2">
-          <article class="habits-panel rounded-2xl p-4">
-            <div class="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Contribution heat · {{ focusHabit?.title }}</h3>
-                <p class="text-xs text-slate-500">Last ~17 weeks (GitHub-style)</p>
-              </div>
-            </div>
-            <div class="mb-3 flex flex-wrap gap-2">
-              <button
-                v-for="row in sortedRows"
-                :key="row.habit.id"
-                class="habits-chip"
-                :class="{ 'habits-chip--active': focusHabitId === row.habit.id }"
-                type="button"
-                @click="focusHabitId = row.habit.id"
-              >
-                {{ row.habit.title }}
-              </button>
-            </div>
-            <div class="habit-contrib-grid overflow-x-auto pb-1">
-              <div class="flex gap-1">
-                <div v-for="(week, wi) in contributionWeeks" :key="wi" class="flex flex-col gap-1">
-                  <button
-                    v-for="cell in week"
-                    :key="cell.key"
-                    class="habit-contrib-cell"
-                    :class="{
-                      'habit-contrib-cell--checked': cell.checked,
-                      'habit-contrib-cell--skip': !cell.due,
-                    }"
-                    type="button"
-                    :title="cell.key"
-                    :aria-label="`Log ${cell.key}`"
-                    :disabled="!cell.due"
-                    @click="onHeatDayClick(cell)"
-                  />
+        <div class="habits-insights-heat-row grid gap-4 lg:grid-cols-2">
+          <div class="habits-insights-heat-stack grid gap-4 content-start">
+            <article class="habits-panel rounded-2xl p-4">
+              <div class="mb-3 flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Month heat · {{ focusHabit?.title }}</h3>
+                  <p class="text-xs text-slate-500">{{ heatMonthLabel }}</p>
+                </div>
+                <div class="flex shrink-0 gap-1">
+                  <button class="habits-icon-btn" type="button" aria-label="Previous month" @click="shiftHeatMonth(-1)">‹</button>
+                  <button class="habits-icon-btn" type="button" aria-label="Next month" @click="shiftHeatMonth(1)">›</button>
                 </div>
               </div>
-            </div>
-          </article>
-
-          <article class="habits-panel rounded-2xl p-4">
-            <div class="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Month heat · {{ focusHabit?.title }}</h3>
-                <p class="text-xs text-slate-500">{{ heatMonthLabel }}</p>
+              <div class="mb-3 flex flex-wrap gap-2">
+                <button
+                  v-for="row in sortedRows"
+                  :key="row.habit.id"
+                  class="habits-chip"
+                  :class="{ 'habits-chip--active': focusHabitId === row.habit.id }"
+                  type="button"
+                  @click="focusHabitId = row.habit.id"
+                >
+                  {{ row.habit.title }}
+                </button>
               </div>
-              <div class="flex gap-1">
-                <button class="habits-icon-btn" type="button" aria-label="Previous month" @click="shiftHeatMonth(-1)">‹</button>
-                <button class="habits-icon-btn" type="button" aria-label="Next month" @click="shiftHeatMonth(1)">›</button>
+              <div class="habit-heat-grid">
+                <button
+                  v-for="cell in heatCells"
+                  :key="cell.key"
+                  class="habit-heat-cell"
+                  :class="{
+                    'habit-heat-cell--checked': cell.checked,
+                    'habit-heat-cell--skip': !cell.due,
+                  }"
+                  type="button"
+                  :title="cell.key"
+                  :aria-label="`Log ${cell.key}`"
+                  :disabled="!cell.due"
+                  @click="onHeatDayClick(cell)"
+                >
+                  {{ cell.day }}
+                </button>
               </div>
-            </div>
-            <div class="habit-heat-grid">
-              <button
-                v-for="cell in heatCells"
-                :key="cell.key"
-                class="habit-heat-cell"
-                :class="{
-                  'habit-heat-cell--checked': cell.checked,
-                  'habit-heat-cell--skip': !cell.due,
-                }"
-                type="button"
-                :title="cell.key"
-                :aria-label="`Log ${cell.key}`"
-                :disabled="!cell.due"
-                @click="onHeatDayClick(cell)"
-              >
-                {{ cell.day }}
-              </button>
-            </div>
-          </article>
-        </div>
+            </article>
 
-        <div class="grid gap-4 lg:grid-cols-2">
-          <article class="habits-panel rounded-2xl p-4">
-            <div class="mb-1">
-              <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Weekly completion</h3>
-              <p class="text-xs text-slate-500">Live trend across the last 8 weeks</p>
-            </div>
-            <LiveTrendChart
-              type="line"
-              :items="historySeries"
-              value-suffix="%"
-              color="#0d9488"
-              empty-label="Not enough habit history yet."
-            />
-          </article>
-          <article class="habits-panel rounded-2xl p-4">
-            <div class="mb-1">
-              <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Monthly trends</h3>
-              <p class="text-xs text-slate-500">Live completion rate by month</p>
-            </div>
-            <LiveTrendChart
-              type="bar"
-              :items="monthlySeries"
-              value-suffix="%"
-              color="#059669"
-              empty-label="Not enough monthly history yet."
-            />
-          </article>
-        </div>
+            <article class="habits-panel rounded-2xl p-4">
+              <div class="mb-3">
+                <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Habit ranking</h3>
+                <p class="text-xs text-slate-500">Completion for {{ heatMonthLabel }}</p>
+              </div>
+              <p v-if="!monthRanking.length" class="text-sm text-slate-500">No due days yet this month.</p>
+              <ul v-else class="habits-rank-list space-y-2.5">
+                <li
+                  v-for="(item, index) in monthRanking"
+                  :key="item.id"
+                  class="habits-rank-row"
+                >
+                  <button
+                    class="habits-rank-btn"
+                    type="button"
+                    :class="{ 'habits-rank-btn--active': focusHabitId === item.id }"
+                    @click="focusHabitId = item.id"
+                  >
+                    <span class="habits-rank-place tabular-nums">{{ index + 1 }}</span>
+                    <span class="habits-rank-body min-w-0 flex-1">
+                      <span class="habits-rank-title truncate">{{ item.title }}</span>
+                      <span
+                        class="habits-rank-bar"
+                        role="progressbar"
+                        :aria-valuenow="item.pct"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        :aria-label="`${item.pct}% complete`"
+                      >
+                        <span
+                          class="habits-rank-bar__fill"
+                          :style="{ width: `${item.pct}%`, background: item.color }"
+                        />
+                      </span>
+                      <span class="habits-rank-meta text-slate-500">
+                        {{ item.done }}/{{ item.due }} · {{ item.streak }} streak
+                      </span>
+                    </span>
+                    <strong class="habits-rank-pct tabular-nums">{{ item.pct }}%</strong>
+                  </button>
+                </li>
+              </ul>
+            </article>
 
-        <article class="habits-panel rounded-2xl p-4">
-          <div class="mb-1">
-            <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Mood vs weekday</h3>
-            <p class="text-xs text-slate-500">Average mood from check-in journals</p>
+            <article class="habits-panel rounded-2xl p-4">
+              <div class="mb-3">
+                <h3 class="font-extrabold text-slate-950 dark:text-slate-50">At risk</h3>
+                <p class="text-xs text-slate-500">Habits likely to break streak today</p>
+              </div>
+              <p v-if="!atRiskInsights.length" class="text-sm text-slate-500">
+                Looking steady — no high-risk habits right now.
+              </p>
+              <ul v-else class="habits-risk-list space-y-2">
+                <li v-for="item in atRiskInsights" :key="item.id">
+                  <button
+                    class="habits-risk-row"
+                    type="button"
+                    @click="focusHabitId = item.id"
+                  >
+                    <span class="min-w-0 flex-1">
+                      <strong class="block truncate text-slate-950 dark:text-slate-50">{{ item.title }}</strong>
+                      <span class="text-xs text-slate-500">
+                        {{ item.streak }}-day streak
+                        <template v-if="item.dueToday && !item.checkedToday"> · still open today</template>
+                      </span>
+                    </span>
+                    <span class="habits-risk-badge tabular-nums">{{ item.risk }}%</span>
+                  </button>
+                </li>
+              </ul>
+            </article>
           </div>
-          <LiveTrendChart
-            type="bar"
-            :items="moodChartItems"
-            value-key="value"
-            value-suffix=""
-            :max-value="5"
-            color="#7c3aed"
-            empty-label="Log mood on check-ins to see correlation."
-            :height="200"
-          />
-        </article>
+
+          <div class="habits-insights-trend-stack grid gap-4">
+            <article class="habits-panel rounded-2xl p-4">
+              <div class="mb-1">
+                <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Weekly completion</h3>
+                <p class="text-xs text-slate-500">Live trend across the last 8 weeks</p>
+              </div>
+              <LiveTrendChart
+                type="line"
+                :items="historySeries"
+                value-suffix="%"
+                color="#0d9488"
+                empty-label="Not enough habit history yet."
+              />
+            </article>
+            <article class="habits-panel rounded-2xl p-4">
+              <div class="mb-1">
+                <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Monthly trends</h3>
+                <p class="text-xs text-slate-500">Live completion rate by month</p>
+              </div>
+              <LiveTrendChart
+                type="bar"
+                :items="monthlySeries"
+                value-suffix="%"
+                color="#059669"
+                empty-label="Not enough monthly history yet."
+              />
+            </article>
+            <article class="habits-panel rounded-2xl p-4">
+              <div class="mb-1">
+                <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Mood vs weekday</h3>
+                <p class="text-xs text-slate-500">Average mood from check-in journals</p>
+              </div>
+              <LiveTrendChart
+                type="bar"
+                :items="moodChartItems"
+                value-key="value"
+                value-suffix=""
+                :max-value="5"
+                color="#7c3aed"
+                empty-label="Log mood on check-ins to see correlation."
+                :height="200"
+              />
+            </article>
+          </div>
+        </div>
       </template>
+      </div>
     </template>
 
     <!-- CATEGORIES -->

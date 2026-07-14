@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   todayTasks: {
@@ -9,6 +9,30 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['go-to-task'])
+
+const isMobile = ref(false)
+const activeColumn = ref(
+  props.todayTasks.overdue?.length
+    ? 'overdue'
+    : props.todayTasks.dueToday?.length
+      ? 'dueToday'
+      : 'completedToday',
+)
+let mediaQuery = null
+
+function syncViewport() {
+  isMobile.value = Boolean(mediaQuery?.matches)
+}
+
+onMounted(() => {
+  mediaQuery = window.matchMedia('(max-width: 767px)')
+  syncViewport()
+  mediaQuery.addEventListener('change', syncViewport)
+})
+
+onUnmounted(() => {
+  mediaQuery?.removeEventListener('change', syncViewport)
+})
 
 const dateLabel = computed(() =>
   new Intl.DateTimeFormat('en-PH', {
@@ -44,10 +68,12 @@ const columns = computed(() => [
   {
     key: 'overdue',
     label: 'Overdue',
+    shortLabel: 'overdue',
     tasks: props.todayTasks.overdue,
     tone: 'today-column--overdue',
     headingClass: 'text-rose-600 dark:text-rose-300',
     badgeClass: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200',
+    activeClass: 'today-filter-btn--overdue-active',
     rowClass: 'today-task-row--overdue',
     timeClass: 'text-rose-600 dark:text-rose-300',
     locationClass: 'text-rose-700/80 dark:text-rose-300/80',
@@ -57,10 +83,12 @@ const columns = computed(() => [
   {
     key: 'dueToday',
     label: 'Due today',
+    shortLabel: 'due',
     tasks: props.todayTasks.dueToday,
     tone: 'today-column--due',
     headingClass: 'text-sky-600 dark:text-sky-300',
     badgeClass: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200',
+    activeClass: 'today-filter-btn--due-active',
     rowClass: 'today-task-row--due',
     timeClass: 'text-sky-600 dark:text-sky-300',
     locationClass: 'text-sky-700/80 dark:text-sky-300/80',
@@ -70,10 +98,12 @@ const columns = computed(() => [
   {
     key: 'completedToday',
     label: 'Completed today',
+    shortLabel: 'done',
     tasks: props.todayTasks.completedToday,
     tone: 'today-column--done',
     headingClass: 'text-emerald-600 dark:text-emerald-300',
     badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200',
+    activeClass: 'today-filter-btn--done-active',
     rowClass: 'today-task-row--done',
     timeClass: '',
     locationClass: '',
@@ -82,24 +112,46 @@ const columns = computed(() => [
     done: true,
   },
 ])
+
+const visibleColumns = computed(() => {
+  if (!isMobile.value) return columns.value
+  return columns.value.filter((column) => column.key === activeColumn.value)
+})
 </script>
 
 <template>
   <section class="today-tasks-panel dashboard-card rounded-2xl">
     <header class="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div>
+      <div class="min-w-0">
         <p class="type-kicker text-emerald-600 dark:text-emerald-300">Today</p>
         <h3 class="type-section-title mt-1.5 text-slate-950 dark:text-slate-100">{{ dateLabel }}</h3>
         <p class="type-body-sm type-muted mt-1.5">Tasks due or overdue today across all spaces.</p>
       </div>
-      <div class="flex flex-wrap gap-2">
+
+      <!-- Mobile: filter buttons -->
+      <div class="flex w-full flex-wrap gap-2 md:hidden">
+        <button
+          v-for="column in columns"
+          :key="`btn-${column.key}`"
+          class="today-filter-btn"
+          :class="[column.badgeClass, activeColumn === column.key ? column.activeClass : '']"
+          type="button"
+          :aria-pressed="activeColumn === column.key"
+          @click="activeColumn = column.key"
+        >
+          {{ column.tasks.length }} {{ column.shortLabel }}
+        </button>
+      </div>
+
+      <!-- Desktop: static counts -->
+      <div class="hidden flex-wrap gap-2 md:flex">
         <span
           v-for="column in columns"
-          :key="column.key"
+          :key="`pill-${column.key}`"
           class="rounded-full px-3 py-1.5 text-sm font-bold"
           :class="column.badgeClass"
         >
-          {{ column.tasks.length }} {{ column.key === 'completedToday' ? 'done' : column.key === 'overdue' ? 'overdue' : 'due' }}
+          {{ column.tasks.length }} {{ column.shortLabel }}
         </span>
       </div>
     </header>
@@ -111,7 +163,7 @@ const columns = computed(() => [
 
     <div v-else class="today-tasks-columns">
       <section
-        v-for="column in columns"
+        v-for="column in visibleColumns"
         :key="column.key"
         class="today-column"
         :class="column.tone"
@@ -167,10 +219,37 @@ const columns = computed(() => [
 </template>
 
 <style scoped>
+.today-filter-btn {
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.2;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.today-filter-btn--overdue-active {
+  border-color: rgb(244 63 94 / 0.45);
+  box-shadow: 0 0 0 3px rgb(244 63 94 / 0.15);
+}
+
+.today-filter-btn--due-active {
+  border-color: rgb(14 165 233 / 0.45);
+  box-shadow: 0 0 0 3px rgb(14 165 233 / 0.15);
+}
+
+.today-filter-btn--done-active {
+  border-color: rgb(16 185 129 / 0.45);
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 0.15);
+}
+
 .today-tasks-columns {
   display: grid;
   gap: 1rem;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
 }
 
 @media (min-width: 768px) {
@@ -182,8 +261,11 @@ const columns = computed(() => [
 
 .today-column {
   display: flex;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
+  box-sizing: border-box;
   border-radius: 1rem;
   border: 1px solid rgb(226 232 240 / 0.9);
   background: rgb(255 255 255 / 0.55);
@@ -280,11 +362,21 @@ const columns = computed(() => [
   color: rgb(52 211 153);
 }
 
+/* Mobile: expand fully — no inner scroll / clip */
 .today-column-list {
-  max-height: 22rem;
-  overflow-y: auto;
-  padding-right: 0.15rem;
-  scrollbar-width: thin;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+/* Desktop 3-col: keep a soft max so one long column doesn't stretch forever */
+@media (min-width: 768px) {
+  .today-column-list {
+    max-height: 22rem;
+    overflow-y: auto;
+    padding-right: 0.15rem;
+    scrollbar-width: thin;
+  }
 }
 
 .today-column-empty {

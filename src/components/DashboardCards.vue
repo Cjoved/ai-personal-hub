@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import DashboardBarChart from './DashboardBarChart.vue'
 import DashboardDonutChart from './DashboardDonutChart.vue'
 import TodayTasksPanel from './TodayTasksPanel.vue'
@@ -32,6 +32,42 @@ const props = defineProps({
 const emit = defineEmits(['go-to-task'])
 
 const isHomeScope = computed(() => props.breakdownScope === 'home')
+
+const isMobile = ref(false)
+const showAllSpaces = ref(false)
+let mediaQuery = null
+
+function syncViewport() {
+  isMobile.value = Boolean(mediaQuery?.matches)
+  if (!isMobile.value) showAllSpaces.value = false
+}
+
+onMounted(() => {
+  mediaQuery = window.matchMedia('(max-width: 767px)')
+  syncViewport()
+  mediaQuery.addEventListener('change', syncViewport)
+})
+
+onUnmounted(() => {
+  mediaQuery?.removeEventListener('change', syncViewport)
+})
+
+const MOBILE_SPACE_PREVIEW = 2
+
+const visibleSpaceStats = computed(() => {
+  const spaces = props.stats.spaceStats || []
+  if (!isMobile.value || showAllSpaces.value) return spaces
+  return spaces.slice(0, MOBILE_SPACE_PREVIEW)
+})
+
+const hiddenSpaceCount = computed(() => {
+  const total = props.stats.spaceStats?.length || 0
+  return Math.max(0, total - MOBILE_SPACE_PREVIEW)
+})
+
+const showSpacesMoreBtn = computed(
+  () => isMobile.value && (props.stats.spaceStats?.length || 0) > MOBILE_SPACE_PREVIEW,
+)
 
 const headerSubtitle = computed(() =>
   isHomeScope.value
@@ -373,7 +409,7 @@ function taskLocation(task, scope = 'full') {
       </div>
     </div>
 
-    <div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-4">
       <article
         v-for="card in visibleStatCards"
         :key="card.key"
@@ -424,7 +460,8 @@ function taskLocation(task, scope = 'full') {
     <!-- HOME: spaces-first layout -->
     <template v-if="isHomeScope">
       <article class="dashboard-card dashboard-feature-card rounded-2xl">
-        <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <!-- Overview + chart: desktop only -->
+        <div class="mb-5 hidden flex-wrap items-start justify-between gap-3 md:flex">
           <div>
             <p class="dashboard-section-kicker mb-1">Workspace overview</p>
             <h3 class="type-section-title text-slate-950 dark:text-slate-100">Spaces at a Glance</h3>
@@ -435,7 +472,7 @@ function taskLocation(task, scope = 'full') {
           </span>
         </div>
 
-        <div class="mb-5 dashboard-chart-panel">
+        <div class="mb-5 hidden dashboard-chart-panel md:block">
           <DashboardBarChart
             title="Open tasks by space"
             :items="spaceOpenBarItems"
@@ -443,9 +480,15 @@ function taskLocation(task, scope = 'full') {
           />
         </div>
 
+        <!-- Compact heading for mobile space grid -->
+        <div class="mb-3 md:hidden">
+          <p class="dashboard-section-kicker mb-0.5">Your spaces</p>
+          <h3 class="type-card-title text-slate-950 dark:text-slate-100">{{ spaceCount }} active</h3>
+        </div>
+
         <div class="dashboard-feature-cards-grid">
           <div
-            v-for="space in stats.spaceStats"
+            v-for="space in visibleSpaceStats"
             :key="space.id"
             class="neon-space-progress-card dashboard-feature-space-card flex h-full flex-col rounded-2xl"
             :style="rowColorStyle(space)"
@@ -497,6 +540,17 @@ function taskLocation(task, scope = 'full') {
             </div>
           </div>
         </div>
+
+        <button
+          v-if="showSpacesMoreBtn"
+          class="dashboard-spaces-more-btn mt-3 md:hidden"
+          type="button"
+          @click="showAllSpaces = !showAllSpaces"
+        >
+          <span v-if="!showAllSpaces">More · +{{ hiddenSpaceCount }} space{{ hiddenSpaceCount === 1 ? '' : 's' }}</span>
+          <span v-else>Show less</span>
+        </button>
+
         <p v-if="!stats.spaceStats?.length" class="text-sm text-slate-500">No spaces yet. Create one from the Spaces tab.</p>
       </article>
     </template>
@@ -657,15 +711,15 @@ function taskLocation(task, scope = 'full') {
           <li
             v-for="task in stats.upcomingDeadlines"
             :key="task.id"
-            class="neon-dash-hover-row neon-inbox flex items-center justify-between gap-3 px-3.5 py-3"
+            class="neon-dash-hover-row neon-inbox dashboard-list-row flex items-start justify-between gap-3 px-3.5 py-3"
           >
-            <div class="min-w-0">
-              <span class="type-task-title block truncate text-slate-800 dark:text-slate-100">{{ task.title }}</span>
-              <small class="type-meta mt-0.5 block truncate text-indigo-600 dark:text-indigo-300">
+            <div class="min-w-0 flex-1">
+              <span class="type-task-title block break-words text-slate-800 dark:text-slate-100">{{ task.title }}</span>
+              <small class="type-meta mt-0.5 block break-words text-indigo-600 dark:text-indigo-300">
                 {{ taskLocation(task, isHomeScope ? 'full' : 'list') }}
               </small>
             </div>
-            <small class="type-pill shrink-0 rounded-lg bg-violet-50 px-2 py-1 text-violet-700 ring-1 ring-violet-100 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-400/30">
+            <small class="dashboard-list-meta type-pill shrink-0 whitespace-nowrap rounded-lg bg-violet-50 px-2 py-1 text-right text-violet-700 ring-1 ring-violet-100 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-400/30">
               {{ formatDate(task.due_date) }}
             </small>
           </li>
@@ -695,17 +749,17 @@ function taskLocation(task, scope = 'full') {
           <li
             v-for="task in stats.latestActivity"
             :key="task.id"
-            class="neon-dash-hover-row flex items-center justify-between gap-3 px-3 py-2.5"
+            class="neon-dash-hover-row dashboard-list-row flex items-start justify-between gap-3 px-3 py-2.5"
             :class="statusNeonClass(task.status)"
           >
-            <div class="min-w-0">
-              <span class="type-task-title block truncate text-slate-800 dark:text-slate-100">{{ task.title }}</span>
-              <small class="type-meta mt-0.5 block truncate opacity-80">
+            <div class="min-w-0 flex-1">
+              <span class="type-task-title block break-words text-slate-800 dark:text-slate-100">{{ task.title }}</span>
+              <small class="type-meta mt-0.5 block break-words opacity-80">
                 {{ taskLocation(task, isHomeScope ? 'full' : 'list') }}
               </small>
             </div>
             <small
-              class="type-badge shrink-0 rounded-full px-2.5 py-1 uppercase tracking-wide ring-1"
+              class="dashboard-list-meta type-badge shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 uppercase tracking-wide ring-1"
               :class="statusPillTone(task.status)"
             >
               {{ task.status.replace('_', ' ') }}

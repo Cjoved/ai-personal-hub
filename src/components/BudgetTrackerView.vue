@@ -639,15 +639,16 @@ async function onCreateFromProposal(proposal) {
     <template v-else>
       <!-- ── DASHBOARD ─────────────────────────────────────────────── -->
       <template v-if="showDashboard">
-        <section class="finance-hero">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
+        <div class="finance-home space-y-5">
+        <section class="finance-hero finance-hero--home">
+          <div class="finance-home-hero-grid flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0">
               <p class="finance-kicker">Monthly overview</p>
               <h1 class="finance-hero-title mt-1">Home</h1>
-              <p class="finance-modal-subtitle mt-1">Your personal finances at a glance.</p>
+              <p class="finance-modal-subtitle finance-home-hero-sub mt-1">Your personal finances at a glance.</p>
             </div>
-            <div class="flex flex-wrap items-center gap-3">
-              <div class="flex items-center gap-2">
+            <div class="finance-home-hero-actions flex flex-wrap items-center gap-3">
+              <div class="finance-home-month flex items-center gap-2">
                 <button
                   class="finance-action-btn"
                   type="button"
@@ -660,7 +661,7 @@ async function onCreateFromProposal(proposal) {
                     <path d="m15 18-6-6 6-6" />
                   </svg>
                 </button>
-                <strong class="min-w-36 text-center type-card-title">{{ monthLabel }}</strong>
+                <strong class="finance-home-month-label min-w-36 text-center type-card-title">{{ monthLabel }}</strong>
                 <button
                   class="finance-action-btn"
                   type="button"
@@ -675,7 +676,8 @@ async function onCreateFromProposal(proposal) {
                 </button>
               </div>
               <button class="finance-primary-btn" type="button" @click="emit('create-transaction')">
-                Add transaction
+                <span class="finance-primary-btn__full">Add transaction</span>
+                <span class="finance-primary-btn__short">Add</span>
               </button>
             </div>
           </div>
@@ -714,7 +716,7 @@ async function onCreateFromProposal(proposal) {
           </div>
         </div>
 
-        <div class="grid gap-3 sm:grid-cols-3">
+        <div class="finance-home-cashflow grid grid-cols-3 gap-2 sm:gap-3">
           <article class="finance-stat-card finance-stat-card--gain">
             <p class="type-caption type-muted">Income</p>
             <p class="mt-1 text-2xl font-black tabular-nums text-emerald-600 dark:text-emerald-300">
@@ -775,7 +777,7 @@ async function onCreateFromProposal(proposal) {
               <h3 class="type-card-title mb-3">Spend by category</h3>
               <DashboardDonutChart
                 :segments="spendDonutSegments"
-                size="lg"
+                size="md"
                 layout="stack"
                 center-label="Spent"
                 empty-label="No expenses this month."
@@ -803,7 +805,7 @@ async function onCreateFromProposal(proposal) {
               <h3 class="type-card-title mb-3">Asset allocation</h3>
               <DashboardDonutChart
                 :segments="allocationSegments"
-                size="lg"
+                size="md"
                 layout="stack"
                 center-label="Assets"
                 empty-label="No assets tracked yet."
@@ -912,20 +914,22 @@ async function onCreateFromProposal(proposal) {
             </ul>
           </article>
         </div>
+        </div>
       </template>
 
       <!-- ── ACTIVITY (Transactions / Accounts) ───────────────────── -->
       <template v-else-if="showActivity">
-        <section class="finance-hero">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
+        <div class="finance-activity space-y-5">
+        <section class="finance-hero finance-hero--activity">
+          <div class="finance-activity-hero-grid flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0">
               <p class="finance-kicker">Money moves</p>
               <h1 class="finance-hero-title mt-1">Activity</h1>
-              <p class="finance-modal-subtitle mt-1">Transactions and account balances in one place.</p>
+              <p class="finance-modal-subtitle finance-activity-hero-sub mt-1">Transactions and account balances in one place.</p>
             </div>
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="finance-activity-hero-actions flex flex-wrap items-center gap-3">
               <template v-if="activityTab === 'transactions'">
-                <div class="flex items-center gap-2">
+                <div class="finance-activity-month flex items-center gap-2">
                   <button
                     class="finance-action-btn"
                     type="button"
@@ -938,7 +942,7 @@ async function onCreateFromProposal(proposal) {
                       <path d="m15 18-6-6 6-6" />
                     </svg>
                   </button>
-                  <strong class="min-w-36 text-center type-card-title">{{ monthLabel }}</strong>
+                  <strong class="finance-activity-month-label min-w-36 text-center type-card-title">{{ monthLabel }}</strong>
                   <button
                     class="finance-action-btn"
                     type="button"
@@ -953,7 +957,8 @@ async function onCreateFromProposal(proposal) {
                   </button>
                 </div>
                 <button class="finance-primary-btn" type="button" @click="emit('create-transaction')">
-                  Add transaction
+                  <span class="finance-primary-btn__full">Add transaction</span>
+                  <span class="finance-primary-btn__short">Add</span>
                 </button>
                 <button
                   class="finance-action-btn"
@@ -972,7 +977,8 @@ async function onCreateFromProposal(proposal) {
               </template>
               <template v-else>
                 <button class="finance-primary-btn" type="button" @click="openCreateAccount">
-                  Add account
+                  <span class="finance-primary-btn__full">Add account</span>
+                  <span class="finance-primary-btn__short">Add</span>
                 </button>
                 <button
                   class="finance-action-btn"
@@ -989,7 +995,7 @@ async function onCreateFromProposal(proposal) {
             </div>
           </div>
 
-          <div class="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Activity sections">
+          <div class="finance-activity-tabs mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Activity sections">
             <button
               class="finance-chip"
               :class="{ 'finance-chip--active': activityTab === 'transactions' }"
@@ -1101,7 +1107,8 @@ async function onCreateFromProposal(proposal) {
           </div>
         </article>
 
-          <div class="finance-tx-table-wrap">
+          <!-- Desktop table -->
+          <div class="finance-tx-table-wrap finance-tx-desktop">
             <table class="finance-tx-table">
               <caption class="sr-only">Transactions for {{ monthLabel }}</caption>
               <thead>
@@ -1127,7 +1134,7 @@ async function onCreateFromProposal(proposal) {
                 </tr>
                 <tr v-for="row in monthTransactions" :key="row.id">
                   <td class="finance-tx-table__date">{{ row.occurred_on }}</td>
-                  <td>
+                  <td class="finance-tx-table__type">
                     <span
                       class="finance-tx-type"
                       :class="{
@@ -1142,7 +1149,7 @@ async function onCreateFromProposal(proposal) {
                   <td class="finance-tx-table__category">
                     {{ row.type === 'transfer' ? 'Transfer' : categoryName(row.category_id) }}
                   </td>
-                  <td>{{ row.account_id ? accountName(row.account_id) : '—' }}</td>
+                  <td class="finance-tx-table__account">{{ row.account_id ? accountName(row.account_id) : '—' }}</td>
                   <td class="finance-tx-table__note">
                     <span :title="row.note || undefined">{{ row.note?.trim() ? row.note : '—' }}</span>
                   </td>
@@ -1183,6 +1190,77 @@ async function onCreateFromProposal(proposal) {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Mobile list -->
+          <div class="finance-tx-list-wrap finance-tx-mobile">
+            <div v-if="!monthTransactions.length" class="finance-tx-empty">
+              <p class="font-semibold text-slate-800 dark:text-slate-100">No transactions for {{ monthLabel }}</p>
+              <p class="type-caption type-muted mt-1">Add your first income or expense to get started.</p>
+              <button class="finance-primary-btn mt-3" type="button" @click="emit('create-transaction')">
+                Add transaction
+              </button>
+            </div>
+            <ul v-else class="finance-tx-list" :aria-label="`Transactions for ${monthLabel}`">
+              <li v-for="row in monthTransactions" :key="row.id" class="finance-tx-list-item">
+                <div class="finance-tx-list-item__main min-w-0">
+                  <div class="finance-tx-list-item__row">
+                    <strong class="finance-tx-list-item__title truncate">
+                      {{ row.type === 'transfer' ? 'Transfer' : categoryName(row.category_id) }}
+                    </strong>
+                    <span
+                      class="finance-tx-list-item__amount tabular-nums"
+                      :class="row.type === 'income' ? 'finance-tx-table__amount--in' : 'finance-tx-table__amount--out'"
+                    >
+                      {{ row.type === 'income' ? '+' : '−' }}{{ formatMoney(row.amount) }}
+                    </span>
+                  </div>
+                  <div class="finance-tx-list-item__meta">
+                    <span>{{ row.occurred_on }}</span>
+                    <span
+                      class="finance-tx-type"
+                      :class="{
+                        'finance-tx-type--income': row.type === 'income',
+                        'finance-tx-type--expense': row.type === 'expense',
+                        'finance-tx-type--transfer': row.type === 'transfer',
+                      }"
+                    >
+                      {{ row.type === 'income' ? 'In' : row.type === 'transfer' ? 'Xfer' : 'Out' }}
+                    </span>
+                    <span class="truncate">{{ row.account_id ? accountName(row.account_id) : '—' }}</span>
+                  </div>
+                  <p v-if="row.note?.trim()" class="finance-tx-list-item__note truncate">{{ row.note }}</p>
+                </div>
+                <div class="finance-tx-list-item__actions">
+                  <button
+                    class="finance-action-btn"
+                    type="button"
+                    aria-label="Edit transaction"
+                    title="Edit"
+                    @click="emit('edit-transaction', row)"
+                  >
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </button>
+                  <button
+                    class="finance-action-btn finance-action-btn--danger"
+                    type="button"
+                    aria-label="Delete transaction"
+                    title="Delete"
+                    :disabled="isBusy"
+                    @click="onDeleteTransaction(row)"
+                  >
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M19 6l-1 14H6L5 6" />
+                    </svg>
+                  </button>
+                </div>
+              </li>
+            </ul>
           </div>
         </template>
 
@@ -1352,20 +1430,22 @@ async function onCreateFromProposal(proposal) {
             </article>
           </div>
         </template>
+        </div>
       </template>
 
       <!-- ── BUDGET (Limits / Recurring) ────────────────────────────── -->
       <template v-else-if="showBudget">
-        <section class="finance-hero">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
+        <div class="finance-budget space-y-5">
+        <section class="finance-hero finance-hero--budget">
+          <div class="finance-budget-hero-grid flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0">
               <p class="finance-kicker">Spend smarter</p>
               <h1 class="finance-hero-title mt-1">Budget</h1>
-              <p class="finance-modal-subtitle mt-1">Category limits and recurring bills.</p>
+              <p class="finance-modal-subtitle finance-budget-hero-sub mt-1">Category limits and recurring bills.</p>
             </div>
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="finance-budget-hero-actions flex flex-wrap items-center gap-3">
               <template v-if="budgetTab === 'limits'">
-                <div class="flex items-center gap-2">
+                <div class="finance-budget-month flex items-center gap-2">
                   <button
                     class="finance-action-btn"
                     type="button"
@@ -1378,7 +1458,7 @@ async function onCreateFromProposal(proposal) {
                       <path d="m15 18-6-6 6-6" />
                     </svg>
                   </button>
-                  <strong class="min-w-36 text-center type-card-title">{{ monthLabel }}</strong>
+                  <strong class="finance-budget-month-label min-w-36 text-center type-card-title">{{ monthLabel }}</strong>
                   <button
                     class="finance-action-btn"
                     type="button"
@@ -1397,18 +1477,20 @@ async function onCreateFromProposal(proposal) {
                   type="button"
                   @click="emit('manage-categories')"
                 >
-                  Manage categories
+                  <span class="finance-primary-btn__full">Manage categories</span>
+                  <span class="finance-primary-btn__short">Categories</span>
                 </button>
               </template>
               <template v-else>
                 <button class="finance-primary-btn" type="button" @click="openModal = 'recurring'">
-                  Add recurring
+                  <span class="finance-primary-btn__full">Add recurring</span>
+                  <span class="finance-primary-btn__short">Add</span>
                 </button>
               </template>
             </div>
           </div>
 
-          <div class="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Budget sections">
+          <div class="finance-budget-tabs mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Budget sections">
             <button
               class="finance-chip"
               :class="{ 'finance-chip--active': budgetTab === 'limits' }"
@@ -1462,60 +1544,77 @@ async function onCreateFromProposal(proposal) {
               >
                 <span class="finance-limit-card__glow" aria-hidden="true"></span>
 
-                <div class="finance-limit-card__top">
-                  <span class="finance-limit-card__icon" aria-hidden="true">
-                    <FinanceCategoryIcon :icon="row.category.icon" />
-                  </span>
-                  <span
-                    class="finance-limit-card__status"
-                    :class="`finance-limit-card__status--${progressTone(row)}`"
+                <span class="finance-limit-card__icon" aria-hidden="true">
+                  <FinanceCategoryIcon :icon="row.category.icon" />
+                </span>
+
+                <div class="finance-limit-card__body">
+                  <div class="finance-limit-card__row">
+                    <h3 class="finance-limit-card__name">{{ row.category.name }}</h3>
+                    <span
+                      class="finance-limit-card__status"
+                      :class="`finance-limit-card__status--${progressTone(row)}`"
+                    >
+                      <template v-if="row.limit == null">Tracked</template>
+                      <template v-else-if="row.over">Over</template>
+                      <template v-else-if="progressTone(row) === 'warn'">Near</template>
+                      <template v-else>On track</template>
+                    </span>
+                  </div>
+
+                  <p class="finance-limit-card__meta">
+                    <template v-if="row.limit != null">
+                      <span class="finance-limit-card__meta-primary">
+                        <template v-if="row.over">Over by {{ formatMoney(Math.abs(row.remaining)) }}</template>
+                        <template v-else>{{ formatMoney(row.remaining) }} left</template>
+                      </span>
+                      <span class="finance-limit-card__meta-detail">
+                        <span aria-hidden="true"> · </span>
+                        <span class="tabular-nums">{{ formatMoney(row.spent) }} / {{ formatMoney(row.limit) }}</span>
+                        <span aria-hidden="true"> · </span>
+                        <span class="tabular-nums">{{ row.pct }}%</span>
+                      </span>
+                    </template>
+                    <template v-else>
+                      <span class="finance-limit-card__meta-primary">No monthly limit</span>
+                      <span class="finance-limit-card__meta-detail">
+                        <span aria-hidden="true"> · </span>
+                        Spent {{ formatMoney(row.spent) }}
+                      </span>
+                    </template>
+                  </p>
+
+                  <div class="finance-limit-card__figures">
+                    <div>
+                      <span class="finance-limit-card__label">Spent</span>
+                      <p class="finance-limit-card__spent tabular-nums">{{ formatMoney(row.spent) }}</p>
+                    </div>
+                    <div class="text-right">
+                      <span class="finance-limit-card__label">{{ row.limit != null ? 'Limit' : 'Cap' }}</span>
+                      <p class="finance-limit-card__limit tabular-nums">
+                        {{ row.limit != null ? formatMoney(row.limit) : '—' }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="row.limit != null"
+                    class="finance-limit-meter"
+                    role="meter"
+                    :aria-valuenow="row.pct"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    :aria-label="`${row.category.name} budget used`"
                   >
-                    <template v-if="row.limit == null">Tracked</template>
-                    <template v-else-if="row.over">Over</template>
-                    <template v-else-if="progressTone(row) === 'warn'">Near limit</template>
-                    <template v-else>On track</template>
-                  </span>
-                </div>
-
-                <h3 class="finance-limit-card__name">{{ row.category.name }}</h3>
-                <p class="finance-limit-card__meta">
-                  <template v-if="row.limit != null">
-                    <template v-if="row.over">Over by {{ formatMoney(Math.abs(row.remaining)) }}</template>
-                    <template v-else>{{ formatMoney(row.remaining) }} remaining</template>
-                  </template>
-                  <template v-else>No monthly limit set</template>
-                </p>
-
-                <div class="finance-limit-card__figures">
-                  <div>
-                    <span class="finance-limit-card__label">Spent</span>
-                    <p class="finance-limit-card__spent tabular-nums">{{ formatMoney(row.spent) }}</p>
+                    <span
+                      class="finance-limit-meter__fill"
+                      :style="{ width: `${Math.min(Math.max(row.pct, row.spent > 0 ? 3 : 0), 100)}%` }"
+                    />
                   </div>
-                  <div class="text-right">
-                    <span class="finance-limit-card__label">{{ row.limit != null ? 'Limit' : 'Cap' }}</span>
-                    <p class="finance-limit-card__limit tabular-nums">
-                      {{ row.limit != null ? formatMoney(row.limit) : '—' }}
-                    </p>
-                  </div>
+                  <p v-if="row.limit != null" class="finance-limit-card__pct tabular-nums">
+                    {{ row.pct }}% used
+                  </p>
                 </div>
-
-                <div
-                  v-if="row.limit != null"
-                  class="finance-limit-meter"
-                  role="meter"
-                  :aria-valuenow="row.pct"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  :aria-label="`${row.category.name} budget used`"
-                >
-                  <span
-                    class="finance-limit-meter__fill"
-                    :style="{ width: `${Math.min(Math.max(row.pct, row.spent > 0 ? 3 : 0), 100)}%` }"
-                  />
-                </div>
-                <p v-if="row.limit != null" class="finance-limit-card__pct tabular-nums">
-                  {{ row.pct }}% used
-                </p>
               </article>
             </div>
           </article>
@@ -1541,7 +1640,7 @@ async function onCreateFromProposal(proposal) {
             </button>
           </div>
 
-          <div class="finance-tx-table-wrap">
+          <div class="finance-tx-table-wrap finance-tx-desktop">
             <table class="finance-tx-table">
               <caption class="sr-only">
                 {{ subscriptionsOnly ? 'Subscriptions' : 'Recurring items' }}
@@ -1655,60 +1754,161 @@ async function onCreateFromProposal(proposal) {
               </tbody>
             </table>
           </div>
+
+          <div class="finance-tx-list-wrap finance-tx-mobile">
+            <div v-if="!subscriptionRows.length" class="finance-tx-empty">
+              <p class="font-semibold text-slate-800 dark:text-slate-100">No recurring items</p>
+              <p class="type-caption type-muted mt-1">Track subscriptions and recurring bills in one place.</p>
+              <button class="finance-primary-btn mt-3" type="button" @click="openModal = 'recurring'">
+                Add recurring
+              </button>
+            </div>
+            <ul v-else class="finance-tx-list" :aria-label="subscriptionsOnly ? 'Subscriptions' : 'Recurring items'">
+              <li v-for="row in subscriptionRows" :key="row.id" class="finance-tx-list-item">
+                <div class="finance-tx-list-item__main min-w-0">
+                  <div class="finance-tx-list-item__row">
+                    <strong class="finance-tx-list-item__title truncate">
+                      {{ row.name }}
+                      <span
+                        v-if="row.is_subscription"
+                        class="finance-recurring-badge finance-recurring-badge--sub ml-1"
+                      >sub</span>
+                    </strong>
+                    <span
+                      class="finance-tx-list-item__amount tabular-nums"
+                      :class="row.type === 'income' ? 'finance-tx-table__amount--in' : 'finance-tx-table__amount--out'"
+                    >
+                      {{ formatMoney(row.amount) }}
+                    </span>
+                  </div>
+                  <div class="finance-tx-list-item__meta">
+                    <span
+                      class="finance-tx-type"
+                      :class="row.type === 'income' ? 'finance-tx-type--income' : 'finance-tx-type--expense'"
+                    >
+                      {{ row.type === 'income' ? 'In' : 'Out' }}
+                    </span>
+                    <span class="capitalize">{{ row.cadence }}</span>
+                    <span>{{ row.next_due }}</span>
+                    <span
+                      class="finance-recurring-badge"
+                      :class="row.is_active ? 'finance-recurring-badge--active' : 'finance-recurring-badge--paused'"
+                    >
+                      {{ row.is_active ? 'Active' : 'Paused' }}
+                    </span>
+                  </div>
+                </div>
+                <div class="finance-tx-list-item__actions">
+                  <button
+                    class="finance-action-btn finance-action-btn--success"
+                    type="button"
+                    aria-label="Post recurring item"
+                    title="Post"
+                    :disabled="isBusy || !row.is_active"
+                    @click="onPostRecurring(row)"
+                  >
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    class="finance-action-btn"
+                    type="button"
+                    :aria-label="row.is_active ? 'Pause recurring item' : 'Activate recurring item'"
+                    :title="row.is_active ? 'Pause' : 'Activate'"
+                    :disabled="isBusy"
+                    @click="onToggleRecurring(row)"
+                  >
+                    <svg
+                      v-if="row.is_active"
+                      class="h-3.5 w-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 5v14M16 5v14" />
+                    </svg>
+                    <svg
+                      v-else
+                      class="h-3.5 w-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path d="m7 4 12 8-12 8V4Z" />
+                    </svg>
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
         </template>
+        </div>
       </template>
 
       <!-- ── NET WORTH (Investments / Debts) ────────────────────────── -->
       <template v-else-if="showNetworth">
-        <section class="finance-hero">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
+        <div class="finance-networth space-y-5">
+        <section class="finance-hero finance-hero--networth">
+          <div class="finance-networth-hero-grid">
+            <div class="finance-networth-hero-copy min-w-0">
               <p class="finance-kicker">Balance sheet</p>
               <h1 class="finance-hero-title mt-1">Net worth</h1>
-              <p class="finance-modal-subtitle mt-1">
-                Cash + investments − debts =
-                <strong :class="gainClass(netWorth)">{{ formatMoney(netWorth) }}</strong>
+              <p class="finance-networth-hero-value mt-1 tabular-nums" :class="gainClass(netWorth)">
+                {{ formatMoney(netWorth) }}
+              </p>
+              <p class="finance-modal-subtitle finance-networth-hero-sub mt-1">
+                Cash + investments − debts
               </p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="finance-networth-hero-actions">
               <template v-if="networthTab === 'investments'">
                 <button class="finance-primary-btn" type="button" @click="openModal = 'holding'">
-                  Add holding
+                  <span class="finance-primary-btn__full">Add holding</span>
+                  <span class="finance-primary-btn__short">Add</span>
                 </button>
-                <button
-                  class="finance-action-btn"
-                  type="button"
-                  aria-label="Mark price"
-                  title="Mark price"
-                  @click="openModal = 'mark'"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M12 3v18" />
-                    <path d="M7 8h7a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8" />
-                  </svg>
-                </button>
-                <button
-                  class="finance-action-btn"
-                  type="button"
-                  aria-label="Add dividend"
-                  title="Add dividend"
-                  @click="openModal = 'dividend'"
-                >
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M12 2v20" />
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                </button>
+                <div class="finance-networth-hero-tools" role="group" aria-label="Holding tools">
+                  <button
+                    class="finance-action-btn"
+                    type="button"
+                    aria-label="Mark price"
+                    title="Mark price"
+                    @click="openModal = 'mark'"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M4 19h16" />
+                      <path d="M6 16V9l3 3 3-5 3 4 3-2v7" />
+                    </svg>
+                  </button>
+                  <button
+                    class="finance-action-btn"
+                    type="button"
+                    aria-label="Add dividend"
+                    title="Add dividend"
+                    @click="openModal = 'dividend'"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 8v8M9.5 10.5c0-.8.7-1.5 2.5-1.5s2.5.7 2.5 1.5-.7 1.5-2.5 1.5-2.5.7-2.5 1.5.7 1.5 2.5 1.5 2.5-.7 2.5-1.5" />
+                    </svg>
+                  </button>
+                </div>
               </template>
               <template v-else>
                 <button class="finance-primary-btn" type="button" @click="openModal = 'debt'">
-                  Add debt
+                  <span class="finance-primary-btn__full">Add debt</span>
+                  <span class="finance-primary-btn__short">Add</span>
                 </button>
               </template>
             </div>
           </div>
 
-          <div class="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Net worth sections">
+          <div class="finance-networth-tabs mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Net worth sections">
             <button
               class="finance-chip"
               :class="{ 'finance-chip--active': networthTab === 'investments' }"
@@ -1733,9 +1933,9 @@ async function onCreateFromProposal(proposal) {
         </section>
 
         <template v-if="networthTab === 'investments'">
-          <div v-if="!portfolioRows.length" class="finance-empty">
+          <div v-if="!portfolioRows.length" class="finance-empty finance-empty--compact">
             <p class="font-semibold">No holdings yet</p>
-            <p class="type-caption type-muted mt-1">Add stocks, UITFs, MP2, crypto, or other assets — each one shows as a card.</p>
+            <p class="type-caption type-muted mt-1">Add stocks, UITFs, MP2, crypto, or other assets.</p>
             <button class="finance-primary-btn mt-3" type="button" @click="openModal = 'holding'">
               Add holding
             </button>
@@ -1805,9 +2005,9 @@ async function onCreateFromProposal(proposal) {
         </template>
 
         <template v-else>
-          <div v-if="!liabilities.length" class="finance-empty">
+          <div v-if="!liabilities.length" class="finance-empty finance-empty--compact">
             <p class="font-semibold">No debts tracked</p>
-            <p class="type-caption type-muted mt-1">Add loans or credit cards — each debt shows as a card.</p>
+            <p class="type-caption type-muted mt-1">Add loans or credit cards as cards.</p>
             <button class="finance-primary-btn mt-3" type="button" @click="openModal = 'debt'">
               Add debt
             </button>
@@ -1904,19 +2104,22 @@ async function onCreateFromProposal(proposal) {
             </article>
           </template>
         </template>
+        </div>
       </template>
 
       <!-- ── GOALS ─────────────────────────────────────────────────── -->
       <template v-else-if="showGoals">
-        <section class="finance-hero">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
+        <div class="finance-goals space-y-5">
+        <section class="finance-hero finance-hero--goals">
+          <div class="finance-goals-hero-grid flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0">
               <p class="finance-kicker">Save with purpose</p>
               <h1 class="finance-hero-title mt-1">Goals</h1>
-              <p class="finance-modal-subtitle mt-1">Track your savings progress towards financial milestones.</p>
+              <p class="finance-modal-subtitle finance-goals-hero-sub mt-1">Track your savings progress towards financial milestones.</p>
             </div>
             <button class="finance-primary-btn" type="button" @click="openModal = 'goal'">
-              New goal
+              <span class="finance-primary-btn__full">New goal</span>
+              <span class="finance-primary-btn__short">New</span>
             </button>
           </div>
         </section>
@@ -1988,6 +2191,7 @@ async function onCreateFromProposal(proposal) {
               <button class="finance-goal-card__save" type="submit" :disabled="isBusy">Save</button>
             </form>
           </article>
+        </div>
         </div>
       </template>
 

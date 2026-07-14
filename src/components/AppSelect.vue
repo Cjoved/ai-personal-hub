@@ -64,16 +64,28 @@ function optionClass(value) {
 async function updateMenuPosition() {
   if (!buttonRef.value || !isOpen.value) return
 
+  await nextTick()
   const rect = buttonRef.value.getBoundingClientRect()
-  const menuHeight = menuRef.value?.offsetHeight || 240
-  const spaceBelow = window.innerHeight - rect.bottom
-  const openUpward = spaceBelow < menuHeight + 12 && rect.top > spaceBelow
+  const menuEl = menuRef.value
+  const measuredHeight = menuEl?.offsetHeight || 240
+  const gap = 6
+  const pad = 8
+  const width = Math.min(Math.max(rect.width, 176), window.innerWidth - pad * 2)
+  const left = Math.min(Math.max(pad, rect.left), Math.max(pad, window.innerWidth - width - pad))
+
+  const spaceBelow = window.innerHeight - rect.bottom - pad
+  const spaceAbove = rect.top - pad
+  const openUpward = spaceBelow < measuredHeight + gap && spaceAbove > spaceBelow
+  const available = openUpward ? spaceAbove - gap : spaceBelow - gap
+  const maxHeight = Math.max(120, Math.min(280, available))
 
   menuStyle.value = {
-    left: `${rect.left}px`,
-    width: `${Math.max(rect.width, 176)}px`,
-    top: openUpward ? `${rect.top - 8}px` : `${rect.bottom + 6}px`,
+    left: `${left}px`,
+    width: `${width}px`,
+    top: openUpward ? `${rect.top - gap}px` : `${rect.bottom + gap}px`,
     transform: openUpward ? 'translateY(-100%)' : 'none',
+    maxHeight: `${maxHeight}px`,
+    overflowY: 'auto',
   }
 }
 
@@ -95,6 +107,7 @@ function select(value) {
 }
 
 function handleClickOutside(event) {
+  if (!isOpen.value) return
   if (root.value?.contains(event.target) || menuRef.value?.contains(event.target)) return
   isOpen.value = false
 }
@@ -157,7 +170,7 @@ watch(isOpen, (open) => {
       <div
         v-if="isOpen"
         ref="menuRef"
-        class="app-select-menu fixed z-[200] p-1.5"
+        class="app-select-menu fixed z-[420] p-1.5"
         :style="menuStyle"
         role="listbox"
         @click.stop

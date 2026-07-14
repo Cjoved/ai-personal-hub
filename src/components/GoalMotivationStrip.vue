@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import GoalMotivationBanner from './GoalMotivationBanner.vue'
 
 const props = defineProps({
@@ -11,9 +11,27 @@ const props = defineProps({
 
 const emit = defineEmits(['go-to-goals'])
 
-const visibleGoals = computed(() => props.goals.slice(0, 3))
-const hasMore = computed(() => props.goals.length > 3)
-const moreCount = computed(() => props.goals.length - 3)
+const isMobile = ref(false)
+let mediaQuery = null
+
+function syncViewport() {
+  isMobile.value = Boolean(mediaQuery?.matches)
+}
+
+onMounted(() => {
+  mediaQuery = window.matchMedia('(max-width: 639px)')
+  syncViewport()
+  mediaQuery.addEventListener('change', syncViewport)
+})
+
+onUnmounted(() => {
+  mediaQuery?.removeEventListener('change', syncViewport)
+})
+
+const maxVisible = computed(() => (isMobile.value ? 1 : 3))
+const visibleGoals = computed(() => props.goals.slice(0, maxVisible.value))
+const hasMore = computed(() => props.goals.length > maxVisible.value)
+const moreCount = computed(() => Math.max(0, props.goals.length - maxVisible.value))
 </script>
 
 <template>
@@ -59,7 +77,8 @@ const moreCount = computed(() => props.goals.length - 3)
 }
 
 .goal-motivation-strip__item {
-  min-width: 9.5rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 @media (min-width: 640px) {

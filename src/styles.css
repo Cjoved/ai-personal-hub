@@ -7966,6 +7966,78 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.finance-holding-card__pct {
+  display: inline-block;
+  margin-left: 0.2rem;
+  font-weight: 800;
+}
+
+.finance-holding-card__actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.finance-holding-card__action {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--holding-accent) 28%, var(--finance-border));
+  background: color-mix(in srgb, var(--holding-accent) 8%, transparent);
+  color: var(--finance-ink);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.finance-holding-card__action:hover {
+  background: color-mix(in srgb, var(--holding-accent) 16%, transparent);
+}
+
+.dark .finance-holding-card__action {
+  color: #f8fafc;
+  border-color: color-mix(in srgb, var(--holding-accent) 40%, #334155);
+}
+
+.finance-mark-preview {
+  margin-top: 0.35rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--finance-border);
+  background: color-mix(in srgb, var(--finance-surface) 88%, #94a3b8);
+}
+
+.dark .finance-mark-preview {
+  background: color-mix(in srgb, #0f172a 88%, #334155);
+}
+
+.finance-mark-preview__label {
+  margin: 0 0 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--finance-muted);
+}
+
+.finance-mark-preview__grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.finance-mark-preview__value {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
 .finance-action-btn {
   position: relative;
   display: grid;

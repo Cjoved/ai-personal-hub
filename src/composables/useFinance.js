@@ -1,9 +1,21 @@
 import { computed, ref, watch } from 'vue'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { ASSET_CLASS_COLORS } from '../lib/financeAssetClasses'
-import { formatMoney, monthBounds, monthKeyFromDate, shiftMonthKey } from './useBudget.js'
+import {
+  formatInvestNumber,
+  formatMoney,
+  monthBounds,
+  monthKeyFromDate,
+  shiftMonthKey,
+} from './useBudget.js'
 
-export { formatMoney, monthBounds, monthKeyFromDate, shiftMonthKey }
+export {
+  formatInvestNumber,
+  formatMoney,
+  monthBounds,
+  monthKeyFromDate,
+  shiftMonthKey,
+}
 
 const DEFAULT_BUDGET_CATEGORIES = [
   { name: 'Food', kind: 'expense', color: '#f97316', monthly_limit: 8000, icon: 'food' },
@@ -1322,6 +1334,29 @@ export function useFinance(user) {
     }))
   }
 
+  async function ensureInvestmentsCategory(kind) {
+    const normalized = kind === 'income' ? 'income' : 'expense'
+    const existing = categories.value.find(
+      (row) => row.kind === normalized && String(row.name).toLowerCase() === 'investments',
+    )
+    if (existing) return existing
+
+    const ok = await createCategory({
+      name: 'Investments',
+      kind: normalized,
+      color: normalized === 'income' ? '#0d9488' : '#0f766e',
+      icon: 'other',
+      monthly_limit: null,
+    })
+    if (!ok) return null
+
+    return (
+      categories.value.find(
+        (row) => row.kind === normalized && String(row.name).toLowerCase() === 'investments',
+      ) || null
+    )
+  }
+
   async function createHolding(payload) {
     if (!userId.value || !payload.name?.trim()) return false
     errorMessage.value = ''
@@ -1347,7 +1382,11 @@ export function useFinance(user) {
     holdings.value = [...holdings.value, holding]
 
     if (payload.lot && Number(payload.lot.units) > 0) {
-      await addLot(holding.id, payload.lot)
+      const lotOk = await addLot(holding.id, {
+        ...payload.lot,
+        account_id: payload.lot.account_id || payload.account_id || null,
+      })
+      if (!lotOk) return false
     }
 
     return true
@@ -1363,14 +1402,17 @@ export function useFinance(user) {
       return false
     }
 
+    const unitCost = Number(payload.unit_cost) || 0
+    const boughtOn = payload.bought_on || new Date().toISOString().slice(0, 10)
+
     const { data, error } = await supabase
       .from('finance_lots')
       .insert({
         user_id: userId.value,
         holding_id: holdingId,
-        bought_on: payload.bought_on || new Date().toISOString().slice(0, 10),
+        bought_on: boughtOn,
         units,
-        unit_cost: Number(payload.unit_cost) || 0,
+        unit_cost: unitCost,
       })
       .select()
       .single()
@@ -1381,6 +1423,144 @@ export function useFinance(user) {
     }
 
     lots.value = [data, ...lots.value]
+
+    const accountId = payload.account_id || null
+    if (accountId) {
+      const total = units * unitCost
+      if (total > 0) {
+        const category = await ensureInvestmentsCategory('expense')
+        if (!category) {
+          errorMessage.value =
+            errorMessage.value || 'Lot saved, but could not create Investments expense category.'
+          return false
+        }
+        const holding = holdings.value.find((row) => row.id === holdingId)
+        const txOk = await createTransaction({
+          category_id: category.id,
+          amount: total,
+          type: 'expense',
+          account_id: accountId,
+          occurred_on: boughtOn,
+          note: `Buy ${holding?.name || 'holding'}`,
+        })
+        if (!txOk) {
+          errorMessage.value =
+            errorMessage.value || 'Lot saved, but funding expense could not be recorded.'
+          return false
+        }
+      }
+    }
+
+    return true
+  }
+
+  async function sellUnits(holdingId, payload) {
+    if (!userId.value || !holdingId) return false
+    errorMessage.value = ''
+
+    const unitsToSell = Number(payload.units)
+    const unitPrice = Number(payload.unit_price)
+    const soldOn = payload.sold_on || new Date().toISOString().slice(0, 10)
+
+    if (!(unitsToSell > 0)) {
+      errorMessage.value = 'Units must be greater than zero.'
+      return false
+    }
+    if (!(unitPrice >= 0)) {
+      errorMessage.value = 'Sell price must be zero or greater.'
+      return false
+    }
+
+    const available = totalUnitsForLots(lots.value, holdingId)
+    if (unitsToSell > available + 1e-10) {
+      errorMessage.value = 'Cannot sell more units than you hold.'
+      return false
+    }
+
+    const ordered = lots.value
+      .filter((row) => row.holding_id === holdingId)
+      .slice()
+      .sort((a, b) => {
+        const byDate = String(a.bought_on).localeCompare(String(b.bought_on))
+        if (byDate) return byDate
+        return String(a.created_at || '').localeCompare(String(b.created_at || ''))
+      })
+
+    let remaining = unitsToSell
+    const nextLots = lots.value.slice()
+
+    for (const lot of ordered) {
+      if (remaining <= 1e-12) break
+      const lotUnits = Number(lot.units) || 0
+      if (!(lotUnits > 0)) continue
+
+      if (lotUnits <= remaining + 1e-12) {
+        const { error } = await supabase
+          .from('finance_lots')
+          .delete()
+          .eq('id', lot.id)
+          .eq('user_id', userId.value)
+        if (error) {
+          errorMessage.value = error.message
+          return false
+        }
+        const idx = nextLots.findIndex((row) => row.id === lot.id)
+        if (idx >= 0) nextLots.splice(idx, 1)
+        remaining = Math.max(0, remaining - lotUnits)
+      } else {
+        const newUnits = lotUnits - remaining
+        const { data, error } = await supabase
+          .from('finance_lots')
+          .update({ units: newUnits })
+          .eq('id', lot.id)
+          .eq('user_id', userId.value)
+          .select()
+          .single()
+        if (error) {
+          errorMessage.value = error.message
+          return false
+        }
+        const idx = nextLots.findIndex((row) => row.id === lot.id)
+        if (idx >= 0) nextLots[idx] = data
+        remaining = 0
+      }
+    }
+
+    lots.value = nextLots
+
+    const markOk = await markPrice(holdingId, {
+      unit_price: unitPrice,
+      marked_on: soldOn,
+    })
+    if (!markOk) return false
+
+    const accountId = payload.account_id || null
+    if (accountId) {
+      const proceeds = unitsToSell * unitPrice
+      if (proceeds > 0) {
+        const category = await ensureInvestmentsCategory('income')
+        if (!category) {
+          errorMessage.value =
+            errorMessage.value || 'Sale saved, but could not create Investments income category.'
+          return false
+        }
+        const holding = holdings.value.find((row) => row.id === holdingId)
+        const txOk = await createTransaction({
+          category_id: category.id,
+          amount: proceeds,
+          type: 'income',
+          account_id: accountId,
+          occurred_on: soldOn,
+          note: `Sell ${holding?.name || 'holding'}`,
+        })
+        if (!txOk) {
+          errorMessage.value =
+            errorMessage.value || 'Sale saved, but proceeds income could not be recorded.'
+          return false
+        }
+      }
+    }
+
     return true
   }
 
@@ -1603,6 +1783,7 @@ export function useFinance(user) {
     debtPlan,
     createHolding,
     addLot,
+    sellUnits,
     markPrice,
     addDividend,
     deleteHolding,

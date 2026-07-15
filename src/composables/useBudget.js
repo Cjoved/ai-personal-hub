@@ -37,6 +37,16 @@ export function formatMoney(amount, currency = 'PHP') {
   }
 }
 
+/** Format units / unit prices with up to 8 fraction digits (trim trailing zeros). */
+export function formatInvestNumber(amount, maxDigits = 8) {
+  const value = Number(amount)
+  if (!Number.isFinite(value)) return '0'
+  const digits = Math.min(Math.max(Number(maxDigits) || 8, 0), 8)
+  const fixed = value.toFixed(digits)
+  if (!fixed.includes('.')) return fixed
+  return fixed.replace(/\.?0+$/, '') || '0'
+}
+
 export function shiftMonthKey(monthKey, delta) {
   const [year, month] = String(monthKey).split('-').map(Number)
   const date = new Date(year, month - 1 + delta, 1)

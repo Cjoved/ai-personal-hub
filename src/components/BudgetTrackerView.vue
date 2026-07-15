@@ -10,7 +10,7 @@ import FinanceMoneyInput from './FinanceMoneyInput.vue'
 import FinanceDateInput from './FinanceDateInput.vue'
 import FinanceHoldingIcon from './FinanceHoldingIcon.vue'
 import { FINANCE_ASSET_CLASSES, assetClassLabel } from '../lib/financeAssetClasses'
-import { formatMoney, shiftMonthKey } from '../composables/useFinance'
+import { formatInvestNumber, formatMoney, shiftMonthKey } from '../composables/useFinance'
 
 const props = defineProps({
   api: {
@@ -147,7 +147,28 @@ const recurringForm = ref({
   next_due: new Date().toISOString().slice(0, 10),
   is_subscription: true,
 })
-const holdingForm = ref({ name: '', asset_class: 'stock', units: '', unit_cost: '' })
+const holdingForm = ref({
+  name: '',
+  asset_class: 'stock',
+  units: '',
+  unit_cost: '',
+  bought_on: new Date().toISOString().slice(0, 10),
+  account_id: '',
+})
+const lotForm = ref({
+  holding_id: '',
+  units: '',
+  unit_cost: '',
+  bought_on: new Date().toISOString().slice(0, 10),
+  account_id: '',
+})
+const sellForm = ref({
+  holding_id: '',
+  units: '',
+  unit_price: '',
+  sold_on: new Date().toISOString().slice(0, 10),
+  account_id: '',
+})
 const markForm = ref({ holding_id: '', unit_price: '', marked_on: new Date().toISOString().slice(0, 10) })
 const dividendForm = ref({ holding_id: '', amount: '', paid_on: new Date().toISOString().slice(0, 10), note: '' })
 const goalForm = ref({ name: '', target_amount: '', current_amount: '0', due_on: '' })
@@ -283,10 +304,56 @@ const accountSelectOptionsWithNone = computed(() => [
   ...accountSelectOptions.value,
 ])
 
+const fundAccountOptions = computed(() => [
+  { value: '', label: 'No cash account' },
+  ...accountSelectOptions.value,
+])
+
 const accountSelectOptionsWithPlaceholder = computed(() => [
   { value: '', label: 'Select account' },
   ...accountSelectOptions.value,
 ])
+
+const markPreview = computed(() => {
+  const holdingId = markForm.value.holding_id
+  if (!holdingId || markForm.value.unit_price === '') return null
+  const row = (portfolioRows.value || []).find((item) => item.holding.id === holdingId)
+  if (!row) return null
+  const price = Number(markForm.value.unit_price)
+  if (!Number.isFinite(price) || price < 0) return null
+  const marketValue = row.units * price
+  const gain = marketValue - row.cost
+  const gainPct = row.cost > 0 ? (gain / row.cost) * 100 : 0
+  return { units: row.units, cost: row.cost, price, marketValue, gain, gainPct }
+})
+
+const lotTotalPreview = computed(() => {
+  const units = Number(lotForm.value.units)
+  const cost = Number(lotForm.value.unit_cost)
+  if (!(units > 0) || !Number.isFinite(cost)) return null
+  return units * cost
+})
+
+const sellTotalPreview = computed(() => {
+  const units = Number(sellForm.value.units)
+  const price = Number(sellForm.value.unit_price)
+  if (!(units > 0) || !Number.isFinite(price) || price < 0) return null
+  return units * price
+})
+
+const sellAvailableUnits = computed(() => {
+  const holdingId = sellForm.value.holding_id
+  if (!holdingId) return 0
+  const row = (portfolioRows.value || []).find((item) => item.holding.id === holdingId)
+  return row ? Number(row.units) || 0 : 0
+})
+
+const holdingBuyTotalPreview = computed(() => {
+  const units = Number(holdingForm.value.units)
+  const cost = Number(holdingForm.value.unit_cost)
+  if (!(units > 0) || !Number.isFinite(cost)) return null
+  return units * cost
+})
 
 const recurringCategoryOptions = computed(() => {
   const list =
@@ -401,6 +468,52 @@ function gainClass(value) {
   return Number(value) >= 0
     ? 'text-emerald-600 dark:text-emerald-300'
     : 'text-rose-600 dark:text-rose-300'
+}
+
+function formatSignedMoney(amount) {
+  const value = Number(amount) || 0
+  if (value > 0) return `+${formatMoney(value)}`
+  if (value < 0) return `−${formatMoney(Math.abs(value))}`
+  return formatMoney(0)
+}
+
+function formatSignedPct(pct) {
+  const value = Number(pct) || 0
+  const body = `${Math.abs(value).toFixed(1)}%`
+  if (value > 0) return `+${body}`
+  if (value < 0) return `−${body}`
+  return body
+}
+
+function openBuyMore(holdingId = '') {
+  lotForm.value = {
+    holding_id: holdingId || '',
+    units: '',
+    unit_cost: '',
+    bought_on: new Date().toISOString().slice(0, 10),
+    account_id: '',
+  }
+  openModal.value = 'lot'
+}
+
+function openSell(holdingId = '') {
+  sellForm.value = {
+    holding_id: holdingId || '',
+    units: '',
+    unit_price: '',
+    sold_on: new Date().toISOString().slice(0, 10),
+    account_id: '',
+  }
+  openModal.value = 'sell'
+}
+
+function openMarkPrice(holdingId = '') {
+  markForm.value = {
+    holding_id: holdingId || markForm.value.holding_id || '',
+    unit_price: '',
+    marked_on: new Date().toISOString().slice(0, 10),
+  }
+  openModal.value = 'mark'
 }
 
 function categoryName(id) {
@@ -585,6 +698,8 @@ async function onCreateHolding() {
     lot: {
       units: holdingForm.value.units,
       unit_cost: holdingForm.value.unit_cost,
+      bought_on: holdingForm.value.bought_on,
+      account_id: holdingForm.value.account_id || null,
     },
   })
   emit('toast', {
@@ -592,7 +707,67 @@ async function onCreateHolding() {
     message: ok ? 'Holding added' : props.api.errorMessage.value || 'Could not add holding.',
   })
   if (ok) {
-    holdingForm.value = { name: '', asset_class: 'stock', units: '', unit_cost: '' }
+    holdingForm.value = {
+      name: '',
+      asset_class: 'stock',
+      units: '',
+      unit_cost: '',
+      bought_on: new Date().toISOString().slice(0, 10),
+      account_id: '',
+    }
+    openModal.value = null
+  }
+  isBusy.value = false
+}
+
+async function onAddLot() {
+  if (isBusy.value || !lotForm.value.holding_id || !lotForm.value.units) return
+  isBusy.value = true
+  const ok = await props.api.addLot(lotForm.value.holding_id, {
+    units: lotForm.value.units,
+    unit_cost: lotForm.value.unit_cost,
+    bought_on: lotForm.value.bought_on,
+    account_id: lotForm.value.account_id || null,
+  })
+  emit('toast', {
+    type: ok ? 'success' : 'error',
+    message: ok ? 'Buy recorded' : props.api.errorMessage.value || 'Could not record buy.',
+  })
+  if (ok) {
+    lotForm.value = {
+      holding_id: '',
+      units: '',
+      unit_cost: '',
+      bought_on: new Date().toISOString().slice(0, 10),
+      account_id: '',
+    }
+    openModal.value = null
+  }
+  isBusy.value = false
+}
+
+async function onSellUnits() {
+  if (isBusy.value || !sellForm.value.holding_id || !sellForm.value.units) return
+  if (sellForm.value.unit_price === '') return
+  isBusy.value = true
+  const ok = await props.api.sellUnits(sellForm.value.holding_id, {
+    units: sellForm.value.units,
+    unit_price: sellForm.value.unit_price,
+    sold_on: sellForm.value.sold_on,
+    account_id: sellForm.value.account_id || null,
+  })
+  emit('toast', {
+    type: ok ? 'success' : 'error',
+    message: ok ? 'Sell recorded' : props.api.errorMessage.value || 'Could not record sell.',
+  })
+  if (ok) {
+    sellForm.value = {
+      holding_id: '',
+      units: '',
+      unit_price: '',
+      sold_on: new Date().toISOString().slice(0, 10),
+      account_id: '',
+    }
     openModal.value = null
   }
   isBusy.value = false
@@ -2130,9 +2305,31 @@ async function onCreateFromProposal(proposal) {
                   <button
                     class="finance-action-btn"
                     type="button"
+                    aria-label="Buy more"
+                    title="Buy more"
+                    @click="openBuyMore()"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
+                  <button
+                    class="finance-action-btn"
+                    type="button"
+                    aria-label="Sell"
+                    title="Sell"
+                    @click="openSell()"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M5 12h14" />
+                    </svg>
+                  </button>
+                  <button
+                    class="finance-action-btn"
+                    type="button"
                     aria-label="Mark price"
                     title="Mark price"
-                    @click="openModal = 'mark'"
+                    @click="openMarkPrice()"
                   >
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <path d="M4 19h16" />
@@ -2211,8 +2408,31 @@ async function onCreateFromProposal(proposal) {
                 </div>
                 <h3 class="finance-holding-card__name">{{ row.holding.name }}</h3>
                 <p class="finance-holding-card__meta">
-                  {{ row.units }} units · {{ formatMoney(row.price) }} / unit
+                  {{ formatInvestNumber(row.units) }} units · ₱{{ formatInvestNumber(row.price) }} / unit
                 </p>
+                <div class="finance-holding-card__actions">
+                  <button
+                    class="finance-holding-card__action"
+                    type="button"
+                    @click="openBuyMore(row.holding.id)"
+                  >
+                    Buy more
+                  </button>
+                  <button
+                    class="finance-holding-card__action"
+                    type="button"
+                    @click="openSell(row.holding.id)"
+                  >
+                    Sell
+                  </button>
+                  <button
+                    class="finance-holding-card__action"
+                    type="button"
+                    @click="openMarkPrice(row.holding.id)"
+                  >
+                    Mark
+                  </button>
+                </div>
                 <div class="finance-holding-card__footer">
                   <div>
                     <span class="finance-holding-card__label">Market value</span>
@@ -2221,8 +2441,11 @@ async function onCreateFromProposal(proposal) {
                   <div class="text-right">
                     <span class="finance-holding-card__label">Gain</span>
                     <p class="finance-holding-card__gain" :class="gainClass(row.gain)">
-                      {{ formatMoney(row.gain) }}
-                      <span v-if="row.cost">({{ row.gainPct >= 0 ? '+' : '' }}{{ row.gainPct.toFixed(1) }}%)</span>
+                      <template v-if="row.cost > 0">
+                        {{ formatSignedMoney(row.gain) }}
+                        <span class="finance-holding-card__pct">({{ formatSignedPct(row.gainPct) }})</span>
+                      </template>
+                      <template v-else>—</template>
                     </p>
                   </div>
                 </div>
@@ -2959,12 +3182,33 @@ async function onCreateFromProposal(proposal) {
                     step="any"
                   />
                 </div>
-                <div class="finance-field sm:col-span-2">
+                <div class="finance-field">
                   <label class="finance-label" for="modal-holding-cost">Unit cost</label>
                   <FinanceMoneyInput
                     id="modal-holding-cost"
                     v-model="holdingForm.unit_cost"
+                    step="any"
+                    placeholder="0.00000000"
                   />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-holding-bought">Bought on</label>
+                  <FinanceDateInput
+                    id="modal-holding-bought"
+                    v-model="holdingForm.bought_on"
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-holding-account">Fund from account</label>
+                  <FinanceSelect
+                    id="modal-holding-account"
+                    v-model="holdingForm.account_id"
+                    :options="fundAccountOptions"
+                    aria-label="Fund from account"
+                  />
+                  <p v-if="holdingBuyTotalPreview != null && holdingForm.account_id" class="type-caption type-muted mt-1">
+                    Debit {{ formatMoney(holdingBuyTotalPreview) }} from selected account
+                  </p>
                 </div>
               </div>
             </section>
@@ -2977,6 +3221,220 @@ async function onCreateFromProposal(proposal) {
               :disabled="isBusy || !holdingForm.name.trim()"
             >
               Add holding
+            </button>
+          </footer>
+        </form>
+      </div>
+
+      <!-- Buy more -->
+      <div
+        v-if="openModal === 'lot'"
+        class="finance-modal-backdrop"
+        @click.self="closeModal"
+      >
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-lot-title"
+          @submit.prevent="onAddLot"
+        >
+          <div class="finance-modal-handle" aria-hidden="true"></div>
+          <header class="finance-modal-header">
+            <div>
+              <p class="finance-kicker">Investments</p>
+              <h2 id="modal-lot-title" class="finance-modal-title">Buy more</h2>
+              <p class="finance-modal-subtitle">Add another lot to an existing holding.</p>
+            </div>
+            <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </header>
+          <div class="finance-modal-body">
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Purchase</h4>
+                  <p class="finance-modal-section__hint">Units and cost for this buy.</p>
+                </div>
+              </div>
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-lot-holding">Holding</label>
+                  <FinanceSelect
+                    id="modal-lot-holding"
+                    v-model="lotForm.holding_id"
+                    :options="holdingSelectOptions"
+                    aria-label="Holding"
+                    placeholder="Select holding"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-lot-units">Units</label>
+                  <input
+                    id="modal-lot-units"
+                    v-model="lotForm.units"
+                    class="finance-input"
+                    type="number"
+                    min="0"
+                    step="any"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-lot-cost">Unit cost</label>
+                  <FinanceMoneyInput
+                    id="modal-lot-cost"
+                    v-model="lotForm.unit_cost"
+                    step="any"
+                    placeholder="0.00000000"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-lot-bought">Bought on</label>
+                  <FinanceDateInput
+                    id="modal-lot-bought"
+                    v-model="lotForm.bought_on"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-lot-account">Fund from account</label>
+                  <FinanceSelect
+                    id="modal-lot-account"
+                    v-model="lotForm.account_id"
+                    :options="fundAccountOptions"
+                    aria-label="Fund from account"
+                  />
+                </div>
+                <p v-if="lotTotalPreview != null" class="type-caption type-muted sm:col-span-2">
+                  Total {{ formatMoney(lotTotalPreview) }}
+                  <template v-if="lotForm.account_id"> · debit selected account</template>
+                </p>
+              </div>
+            </section>
+          </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !lotForm.holding_id || !lotForm.units || lotForm.unit_cost === ''"
+            >
+              Record buy
+            </button>
+          </footer>
+        </form>
+      </div>
+
+      <!-- Sell -->
+      <div
+        v-if="openModal === 'sell'"
+        class="finance-modal-backdrop"
+        @click.self="closeModal"
+      >
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-sell-title"
+          @submit.prevent="onSellUnits"
+        >
+          <div class="finance-modal-handle" aria-hidden="true"></div>
+          <header class="finance-modal-header">
+            <div>
+              <p class="finance-kicker">Investments</p>
+              <h2 id="modal-sell-title" class="finance-modal-title">Sell</h2>
+              <p class="finance-modal-subtitle">Reduce units (FIFO cost basis) and mark the sell price.</p>
+            </div>
+            <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </header>
+          <div class="finance-modal-body">
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Sale</h4>
+                  <p class="finance-modal-section__hint">
+                    Available
+                    {{ sellForm.holding_id ? formatInvestNumber(sellAvailableUnits) : '—' }}
+                    units.
+                  </p>
+                </div>
+              </div>
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-sell-holding">Holding</label>
+                  <FinanceSelect
+                    id="modal-sell-holding"
+                    v-model="sellForm.holding_id"
+                    :options="holdingSelectOptions"
+                    aria-label="Holding"
+                    placeholder="Select holding"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-sell-units">Units</label>
+                  <input
+                    id="modal-sell-units"
+                    v-model="sellForm.units"
+                    class="finance-input"
+                    type="number"
+                    min="0"
+                    step="any"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-sell-price">Unit sell price</label>
+                  <FinanceMoneyInput
+                    id="modal-sell-price"
+                    v-model="sellForm.unit_price"
+                    step="any"
+                    placeholder="0.00000000"
+                    required
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-sell-date">Sold on</label>
+                  <FinanceDateInput
+                    id="modal-sell-date"
+                    v-model="sellForm.sold_on"
+                  />
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-sell-account">Deposit proceeds to</label>
+                  <FinanceSelect
+                    id="modal-sell-account"
+                    v-model="sellForm.account_id"
+                    :options="fundAccountOptions"
+                    aria-label="Deposit proceeds to account"
+                  />
+                </div>
+                <p v-if="sellTotalPreview != null" class="type-caption type-muted sm:col-span-2">
+                  Proceeds {{ formatMoney(sellTotalPreview) }}
+                  <template v-if="sellForm.account_id"> · credit selected account</template>
+                </p>
+              </div>
+            </section>
+          </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="
+                isBusy ||
+                !sellForm.holding_id ||
+                !sellForm.units ||
+                sellForm.unit_price === '' ||
+                Number(sellForm.units) > sellAvailableUnits + 1e-10
+              "
+            >
+              Record sell
             </button>
           </footer>
         </form>
@@ -3031,6 +3489,8 @@ async function onCreateFromProposal(proposal) {
                   <FinanceMoneyInput
                     id="modal-mark-price"
                     v-model="markForm.unit_price"
+                    step="any"
+                    placeholder="0.00000000"
                     required
                   />
                 </div>
@@ -3040,6 +3500,25 @@ async function onCreateFromProposal(proposal) {
                     id="modal-mark-date"
                     v-model="markForm.marked_on"
                   />
+                </div>
+                <div v-if="markPreview" class="finance-mark-preview sm:col-span-full">
+                  <p class="finance-mark-preview__label">Preview at this mark</p>
+                  <div class="finance-mark-preview__grid">
+                    <div>
+                      <span class="finance-holding-card__label">Market value</span>
+                      <p class="finance-mark-preview__value">{{ formatMoney(markPreview.marketValue) }}</p>
+                    </div>
+                    <div class="text-right">
+                      <span class="finance-holding-card__label">Gain</span>
+                      <p class="finance-mark-preview__value" :class="gainClass(markPreview.gain)">
+                        <template v-if="markPreview.cost > 0">
+                          {{ formatSignedMoney(markPreview.gain) }}
+                          <span>({{ formatSignedPct(markPreview.gainPct) }})</span>
+                        </template>
+                        <template v-else>—</template>
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>

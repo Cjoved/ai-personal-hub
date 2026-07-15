@@ -23,6 +23,12 @@ const navItems = [
     icon: 'today',
   },
   {
+    id: 'journal',
+    label: 'Journal',
+    hint: 'Daily learnings',
+    icon: 'journal',
+  },
+  {
     id: 'insights',
     label: 'Insights',
     hint: 'Streaks & charts',
@@ -81,6 +87,10 @@ function navClass(isActive) {
           <svg v-if="item.icon === 'today'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l3 2" />
+          </svg>
+          <svg v-else-if="item.icon === 'journal'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 4h11a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" />
+            <path d="M9 8h5M9 12h5" />
           </svg>
           <svg v-else-if="item.icon === 'insights'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 19V5M4 19h16" />

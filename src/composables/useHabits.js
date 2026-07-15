@@ -208,17 +208,19 @@ export function weekStrip(habit, checkSet, todayKey = localDateKey(), checksByHa
   return Array.from({ length: 7 }, (_, index) => {
     const key = shiftDateKey(todayKey, index - 6)
     const due = isHabitDueOn(habit, key, checksByHabit)
+    const checked = checkSet.has(key)
     return {
       key,
       label: WEEKDAY_LABELS[parseLocalDate(key).getDay()],
       due,
-      checked: checkSet.has(key),
+      checked,
       isToday: key === todayKey,
+      missed: due && !checked && key < todayKey,
     }
   })
 }
 
-export function monthHeat(habit, checkSet, monthDate = new Date(), checksByHabit = null) {
+export function monthHeat(habit, checkSet, monthDate = new Date(), checksByHabit = null, todayKey = localDateKey()) {
   const year = monthDate.getFullYear()
   const month = monthDate.getMonth()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -227,11 +229,13 @@ export function monthHeat(habit, checkSet, monthDate = new Date(), checksByHabit
   for (let day = 1; day <= daysInMonth; day += 1) {
     const key = localDateKey(new Date(year, month, day))
     const due = isHabitDueOn(habit, key, checksByHabit)
+    const checked = checkSet.has(key)
     cells.push({
       key,
       day,
       due,
-      checked: checkSet.has(key),
+      checked,
+      missed: due && !checked && key < todayKey,
     })
   }
 
@@ -248,7 +252,7 @@ export function monthCompletionForHabit(
 ) {
   if (!habit || !monthKey) return { due: 0, done: 0, pct: 0 }
   const [year, month] = monthKey.split('-').map(Number)
-  const cells = monthHeat(habit, checkSet, new Date(year, month - 1, 1), checksByHabit)
+  const cells = monthHeat(habit, checkSet, new Date(year, month - 1, 1), checksByHabit, todayKey)
   const endKey =
     monthKey === String(todayKey).slice(0, 7)
       ? todayKey
@@ -487,6 +491,56 @@ export function exportHabitsCsv(habits, checks) {
   return lines.join('\n')
 }
 
+export const JOURNAL_PROMPTS = [
+  {
+    key: 'keep_doing',
+    label: 'Keep for tomorrow',
+    hint: 'Ano ang gusto mong ulitin bukas?',
+    placeholder: '1–2 sentences…',
+  },
+  {
+    key: 'avoid_doing',
+    label: 'Cut for tomorrow',
+    hint: 'Ano ang ayaw mong ulitin?',
+    placeholder: '1–2 sentences…',
+  },
+  {
+    key: 'win',
+    label: 'Win / thankful',
+    hint: 'Isang panalo o pinapasalamatan mo ngayon?',
+    placeholder: '1–2 sentences…',
+  },
+  {
+    key: 'tomorrow_focus',
+    label: 'Bukas focus',
+    hint: 'Isang bagay na i-fofocus mo bukas?',
+    placeholder: '1–2 sentences…',
+  },
+]
+
+export function emptyDailyJournal(journalOn = localDateKey()) {
+  return {
+    id: null,
+    journal_on: journalOn,
+    keep_doing: '',
+    avoid_doing: '',
+    win: '',
+    tomorrow_focus: '',
+    mood: null,
+  }
+}
+
+export function journalFilledCount(entry) {
+  if (!entry) return 0
+  let count = 0
+  if (String(entry.keep_doing || '').trim()) count += 1
+  if (String(entry.avoid_doing || '').trim()) count += 1
+  if (String(entry.win || '').trim()) count += 1
+  if (String(entry.tomorrow_focus || '').trim()) count += 1
+  if (entry.mood != null) count += 1
+  return count
+}
+
 export { WEEKDAY_LABELS, XP_PER_LEVEL }
 
 export function useHabits(user) {
@@ -494,6 +548,7 @@ export function useHabits(user) {
   const habits = ref([])
   const checks = ref([])
   const freezes = ref([])
+  const dailyJournals = ref([])
   const progress = ref({ xp: 0, level: 1, freeze_tokens: 2, badges: [] })
   const isLoading = ref(false)
   const isSaving = ref(false)
@@ -574,7 +629,7 @@ export function useHabits(user) {
     if (!focusHabit.value) return []
     const set = checksByHabit.value.get(focusHabit.value.id) || new Set()
     const [year, month] = heatMonth.value.split('-').map(Number)
-    return monthHeat(focusHabit.value, set, new Date(year, month - 1, 1), checksByHabit.value)
+    return monthHeat(focusHabit.value, set, new Date(year, month - 1, 1), checksByHabit.value, todayKey.value)
   })
 
   const historySeries = computed(() =>
@@ -586,6 +641,35 @@ export function useHabits(user) {
   )
 
   const anomalies = computed(() => detectAnomalies(filteredHabits.value, checksByHabit.value, todayKey.value))
+
+  const todayJournal = computed(() => {
+    const found = dailyJournals.value.find((row) => row.journal_on === todayKey.value)
+    return found || emptyDailyJournal(todayKey.value)
+  })
+
+  const journalFeed = computed(() =>
+    [...dailyJournals.value].sort((a, b) => String(b.journal_on).localeCompare(String(a.journal_on))),
+  )
+
+  const checkInJournalEntries = computed(() => {
+    const habitMap = new Map(habits.value.map((habit) => [habit.id, habit]))
+    return checks.value
+      .filter((check) => check.mood != null || String(check.journal_note || '').trim())
+      .map((check) => {
+        const habit = habitMap.get(check.habit_id)
+        return {
+          id: check.id,
+          dateKey: check.checked_on,
+          habitId: check.habit_id,
+          habitTitle: habit?.title || 'Habit',
+          habitColor: habit?.color || '#0d9488',
+          mood: check.mood,
+          note: check.journal_note || '',
+          sentiment: check.sentiment || null,
+        }
+      })
+      .sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)))
+  })
 
   const moodSeries = computed(() => moodCorrelation(checks.value, filteredHabits.value))
 
@@ -650,6 +734,7 @@ export function useHabits(user) {
       habits.value = []
       checks.value = []
       freezes.value = []
+      dailyJournals.value = []
       return
     }
 
@@ -658,7 +743,7 @@ export function useHabits(user) {
 
     const since = shiftDateKey(todayKey.value, -370)
 
-    const [categoryResult, habitResult, checkResult, freezeResult] = await Promise.all([
+    const [categoryResult, habitResult, checkResult, freezeResult, journalResult] = await Promise.all([
       supabase.from('habit_categories').select('*').eq('user_id', userId.value).order('position'),
       supabase.from('habits').select('*').eq('user_id', userId.value).order('created_at', { ascending: false }),
       supabase
@@ -672,6 +757,12 @@ export function useHabits(user) {
         .select('*')
         .eq('user_id', userId.value)
         .gte('used_on', since),
+      supabase
+        .from('habit_daily_journals')
+        .select('*')
+        .eq('user_id', userId.value)
+        .gte('journal_on', since)
+        .order('journal_on', { ascending: false }),
     ])
 
     if (categoryResult.error || habitResult.error || checkResult.error) {
@@ -688,6 +779,7 @@ export function useHabits(user) {
     habits.value = habitResult.data ?? []
     checks.value = checkResult.data ?? []
     freezes.value = freezeResult.error ? [] : freezeResult.data ?? []
+    dailyJournals.value = journalResult.error ? [] : journalResult.data ?? []
 
     await ensureDefaultCategories()
     await ensureProgress()
@@ -703,6 +795,58 @@ export function useHabits(user) {
       offlinePending.value = flushed.remaining
       if (flushed.applied > 0) await fetchHabits()
     }
+  }
+
+  function getDailyJournal(dateKey) {
+    const key = dateKey || todayKey.value
+    return dailyJournals.value.find((row) => row.journal_on === key) || emptyDailyJournal(key)
+  }
+
+  async function saveDailyJournal(payload) {
+    if (!userId.value) return false
+    const journalOn = payload.journal_on || todayKey.value
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(journalOn)) {
+      errorMessage.value = 'Invalid journal date.'
+      return false
+    }
+
+    errorMessage.value = ''
+    isSaving.value = true
+
+    const body = {
+      user_id: userId.value,
+      journal_on: journalOn,
+      keep_doing: String(payload.keep_doing || '').trim() || null,
+      avoid_doing: String(payload.avoid_doing || '').trim() || null,
+      win: String(payload.win || '').trim() || null,
+      tomorrow_focus: String(payload.tomorrow_focus || '').trim() || null,
+      mood: payload.mood == null || payload.mood === '' ? null : Number(payload.mood),
+    }
+
+    if (body.mood != null && (Number.isNaN(body.mood) || body.mood < 1 || body.mood > 5)) {
+      errorMessage.value = 'Mood must be between 1 and 5.'
+      isSaving.value = false
+      return false
+    }
+
+    const { data, error } = await supabase
+      .from('habit_daily_journals')
+      .upsert(body, { onConflict: 'user_id,journal_on' })
+      .select()
+      .single()
+
+    isSaving.value = false
+
+    if (error) {
+      errorMessage.value = error.message
+      return false
+    }
+
+    const next = dailyJournals.value.filter((row) => row.journal_on !== journalOn)
+    dailyJournals.value = [data, ...next].sort((a, b) =>
+      String(b.journal_on).localeCompare(String(a.journal_on)),
+    )
+    return true
   }
 
   async function createCategory(payload) {
@@ -1059,6 +1203,7 @@ export function useHabits(user) {
         habits.value = []
         checks.value = []
         freezes.value = []
+        dailyJournals.value = []
       }
     },
     { immediate: true },
@@ -1075,6 +1220,7 @@ export function useHabits(user) {
     habits,
     checks,
     freezes,
+    dailyJournals,
     progress,
     isLoading,
     isSaving,
@@ -1094,7 +1240,12 @@ export function useHabits(user) {
     moodSeries,
     offlinePending,
     checksByHabit,
+    todayJournal,
+    journalFeed,
+    checkInJournalEntries,
     fetchHabits,
+    getDailyJournal,
+    saveDailyJournal,
     createCategory,
     updateCategory,
     deleteCategory,

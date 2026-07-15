@@ -48,6 +48,28 @@ function csvEscape(value) {
   return text
 }
 
+function localDateKey(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/** Local Mon–Sun week bounds as YYYY-MM-DD keys. */
+function localWeekBounds(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const day = start.getDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day
+  start.setDate(start.getDate() + mondayOffset)
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)
+  return { start: localDateKey(start), end: localDateKey(end) }
+}
+
+function normalizeDailyLimitSchedule(value) {
+  if (value === 'custom_days' || value === 'weekly') return value
+  return 'daily'
+}
+
 function totalUnitsForLots(lotRows, holdingId) {
   return lotRows
     .filter((row) => row.holding_id === holdingId)
@@ -116,6 +138,7 @@ export function useFinance(user) {
   const liabilities = ref([])
   const goals = ref([])
   const allTxLite = ref([])
+  const dailyLimits = ref([])
 
   const isLoading = ref(false)
   const errorMessage = ref('')
@@ -205,6 +228,80 @@ export function useFinance(user) {
   )
 
   const overLimitCategories = computed(() => categoryProgress.value.filter((row) => row.over))
+
+  /** Recurring spend caps per account — today or this Mon–Sun week when schedule applies. */
+  const dailyLimitProgress = computed(() => {
+    const today = localDateKey()
+    const todayDow = new Date().getDay()
+    const { start: weekStart, end: weekEnd } = localWeekBounds()
+    const accountById = Object.fromEntries(accounts.value.map((a) => [a.id, a]))
+    return dailyLimits.value
+      .map((limit) => {
+        const accountId = limit.account_id
+        const account = accountById[accountId]
+        const cap = Number(limit.amount) || 0
+        const schedule = normalizeDailyLimitSchedule(limit.schedule)
+        const targetDays = Array.isArray(limit.target_days)
+          ? limit.target_days.map((d) => Number(d)).filter((d) => d >= 0 && d <= 6)
+          : []
+        const isWeekly = schedule === 'weekly'
+        const appliesToday =
+          isWeekly ||
+          schedule === 'daily' ||
+          (schedule === 'custom_days' && targetDays.includes(todayDow))
+
+        let spent = 0
+        if (appliesToday) {
+          for (const row of allTxLite.value) {
+            if (row.type !== 'expense') continue
+            if (row.account_id !== accountId) continue
+            if (isWeekly) {
+              if (row.occurred_on < weekStart || row.occurred_on > weekEnd) continue
+            } else if (row.occurred_on !== today) {
+              continue
+            }
+            spent += Number(row.amount) || 0
+          }
+        }
+
+        const remaining = cap - spent
+        const pct = appliesToday && cap > 0 ? Math.min(100, Math.round((spent / cap) * 100)) : 0
+        const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        let scheduleLabel = 'Every day'
+        if (isWeekly) scheduleLabel = 'This week'
+        else if (schedule === 'custom_days') {
+          scheduleLabel = targetDays.length
+            ? targetDays
+                .slice()
+                .sort((a, b) => a - b)
+                .map((d) => dayLabels[d])
+                .join(', ')
+            : 'Custom days'
+        }
+
+        return {
+          id: limit.id,
+          account_id: accountId,
+          schedule,
+          target_days: targetDays,
+          note: limit.note,
+          accountName: account?.name || 'Account',
+          accountColor: account?.color || '#0f766e',
+          scheduleLabel,
+          appliesToday,
+          isWeekly,
+          spent,
+          limit: cap,
+          remaining,
+          pct,
+          over: appliesToday && spent > cap,
+        }
+      })
+      .sort((a, b) => {
+        if (a.appliesToday !== b.appliesToday) return a.appliesToday ? -1 : 1
+        return (a.accountName || '').localeCompare(b.accountName || '')
+      })
+  })
 
   const spendDonutSegments = computed(() =>
     expenseCategories.value
@@ -411,6 +508,7 @@ export function useFinance(user) {
       liabilities.value = []
       goals.value = []
       allTxLite.value = []
+      dailyLimits.value = []
       return
     }
 
@@ -433,6 +531,7 @@ export function useFinance(user) {
       liabilityResult,
       goalResult,
       txLiteResult,
+      dailyLimitsResult,
     ] = await Promise.all([
       supabase.from('budget_categories').select('*').eq('user_id', userId.value).order('name'),
       supabase
@@ -460,6 +559,12 @@ export function useFinance(user) {
           d.setFullYear(d.getFullYear() - 2)
           return d.toISOString().slice(0, 10)
         })()),
+      supabase
+        .from('finance_daily_limits')
+        .select('*')
+        .eq('user_id', userId.value)
+        .order('created_at', { ascending: false })
+        .limit(90),
     ])
 
     const firstError =
@@ -474,7 +579,8 @@ export function useFinance(user) {
       dividendResult.error ||
       liabilityResult.error ||
       goalResult.error ||
-      txLiteResult.error
+      txLiteResult.error ||
+      dailyLimitsResult.error
 
     if (firstError) {
       errorMessage.value = firstError.message || 'Failed to load finance data.'
@@ -494,10 +600,85 @@ export function useFinance(user) {
     liabilities.value = liabilityResult.data ?? []
     goals.value = goalResult.data ?? []
     allTxLite.value = txLiteResult.data ?? []
+    dailyLimits.value = dailyLimitsResult.data ?? []
 
     await ensureDefaultCategories()
     await ensureDefaultAccounts()
     isLoading.value = false
+  }
+
+  async function upsertDailyLimit(payload) {
+    if (!userId.value) return false
+    errorMessage.value = ''
+
+    const account_id = payload.account_id
+    const amount = Number(payload.amount)
+    const schedule = normalizeDailyLimitSchedule(payload.schedule)
+    const target_days =
+      schedule === 'custom_days'
+        ? [...new Set((payload.target_days || []).map((d) => Number(d)).filter((d) => d >= 0 && d <= 6))].sort(
+            (a, b) => a - b,
+          )
+        : []
+
+    if (!account_id) {
+      errorMessage.value = 'Choose which account this limit applies to.'
+      return false
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      errorMessage.value = 'Enter a spend limit greater than zero.'
+      return false
+    }
+    if (schedule === 'custom_days' && !target_days.length) {
+      errorMessage.value = 'Pick at least one weekday for a custom schedule.'
+      return false
+    }
+
+    const row = {
+      user_id: userId.value,
+      account_id,
+      amount,
+      schedule,
+      target_days,
+      note: payload.note?.trim() || null,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase
+      .from('finance_daily_limits')
+      .upsert(row, { onConflict: 'user_id,account_id' })
+      .select('*')
+      .single()
+
+    if (error) {
+      errorMessage.value = error.message
+      return false
+    }
+
+    if (data) {
+      const rest = dailyLimits.value.filter((item) => item.account_id !== data.account_id)
+      dailyLimits.value = [data, ...rest]
+    }
+    return true
+  }
+
+  async function deleteDailyLimit(id) {
+    if (!userId.value || !id) return false
+    errorMessage.value = ''
+
+    const { error } = await supabase
+      .from('finance_daily_limits')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId.value)
+
+    if (error) {
+      errorMessage.value = error.message
+      return false
+    }
+
+    dailyLimits.value = dailyLimits.value.filter((item) => item.id !== id)
+    return true
   }
 
   const fetchBudget = fetchFinance
@@ -1341,6 +1522,7 @@ export function useFinance(user) {
         liabilities.value = []
         goals.value = []
         allTxLite.value = []
+        dailyLimits.value = []
       }
     },
     { immediate: true },
@@ -1363,6 +1545,7 @@ export function useFinance(user) {
     liabilities,
     goals,
     allTxLite,
+    dailyLimits,
     isLoading,
     errorMessage,
     selectedMonth,
@@ -1377,6 +1560,7 @@ export function useFinance(user) {
     monthSummary,
     categoryProgress,
     overLimitCategories,
+    dailyLimitProgress,
     spendDonutSegments,
     incomeExpenseBars,
     envelopeRows,
@@ -1396,6 +1580,8 @@ export function useFinance(user) {
     createCategory,
     updateCategory,
     deleteCategory,
+    upsertDailyLimit,
+    deleteDailyLimit,
     createTransaction,
     createTransfer,
     updateTransaction,

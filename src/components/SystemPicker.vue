@@ -44,25 +44,26 @@ const systems = [
   <Teleport to="body">
     <div
       v-if="isOpen"
-      class="system-picker-backdrop fixed inset-0 z-[280] flex items-center justify-center bg-slate-950/60 p-4"
+      class="system-picker-backdrop"
       @click.self="emit('close')"
     >
       <div
-        class="system-picker w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-950 p-5 text-slate-100 shadow-2xl sm:p-6"
+        class="system-picker"
         role="dialog"
         aria-modal="true"
         aria-label="Choose a system"
         @click.stop
       >
-        <div class="mb-5 flex items-start justify-between gap-3">
+        <div class="system-picker-handle" aria-hidden="true"></div>
+        <div class="system-picker-header">
           <div class="min-w-0">
             <AppLogo variant="sidebar" :show-tagline="false" />
-            <p class="type-body-sm mt-3 text-slate-400">
+            <p class="system-picker-lead">
               Personal Hub — choose a system. Each one has its own navigation.
             </p>
           </div>
           <button
-            class="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 text-slate-300 transition hover:bg-white/10"
+            class="system-picker-close"
             type="button"
             aria-label="Close system picker"
             @click="emit('close')"
@@ -73,7 +74,7 @@ const systems = [
           </button>
         </div>
 
-        <div class="grid gap-3 sm:grid-cols-3">
+        <div class="system-picker-grid">
           <button
             v-for="system in systems"
             :key="system.id"

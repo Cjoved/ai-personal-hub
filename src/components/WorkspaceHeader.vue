@@ -214,45 +214,58 @@ defineExpose({ focusSearch })
       v-if="activeList || isDashboard"
       class="workspace-view-toolbar relative mt-4 border-t border-slate-200/80 pt-4"
     >
-      <ViewTabs v-if="activeList" :model-value="activeView" @update:model-value="emit('update:activeView', $event)" />
+      <div class="workspace-view-toolbar__primary">
+        <ViewTabs v-if="activeList" :model-value="activeView" @update:model-value="emit('update:activeView', $event)" />
 
-      <span v-if="activeList" class="hidden h-6 w-px bg-slate-200 sm:block"></span>
+        <GoalMotivationStrip
+          v-if="isDashboard"
+          class="min-w-0 flex-1"
+          :goals="activeGoals"
+          @go-to-goals="emit('go-to-goals')"
+        />
+      </div>
 
-      <TaskFilterMenu
-        v-if="activeList"
-        :model-value="selectedFilter"
-        @update:model-value="emit('update:selectedFilter', $event)"
-      />
+      <div v-if="activeList" class="workspace-view-toolbar__secondary">
+        <TaskFilterMenu
+          :model-value="selectedFilter"
+          @update:model-value="emit('update:selectedFilter', $event)"
+        />
 
-      <AppSelect
-        v-if="activeList && allTags.length"
-        class="workspace-tag-select min-w-[9.5rem] shrink-0"
-        :model-value="selectedTag"
-        :options="tagOptions"
-        size="sm"
-        aria-label="Filter by tag"
-        @update:model-value="emit('update:selectedTag', $event)"
-      />
+        <AppSelect
+          v-if="allTags.length"
+          class="workspace-tag-select min-w-[7.5rem] sm:min-w-[9.5rem] shrink-0"
+          :model-value="selectedTag"
+          :options="tagOptions"
+          size="sm"
+          aria-label="Filter by tag"
+          @update:model-value="emit('update:selectedTag', $event)"
+        />
+
+        <button
+          class="workspace-view-toolbar__schedule inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-violet-200/90 bg-violet-50 px-3 text-sm font-bold text-violet-700 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-200"
+          type="button"
+          title="AI Scheduler"
+          aria-label="AI Scheduler"
+          @click="emit('open-scheduler')"
+        >
+          <span class="workspace-view-toolbar__schedule-label">Schedule</span>
+          <svg
+            class="workspace-view-toolbar__schedule-icon h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M16 3v4M8 3v4M3 11h18" />
+          </svg>
+        </button>
+      </div>
 
       <button
-        class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-violet-200/90 bg-violet-50 px-3 text-sm font-bold text-violet-700 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-200"
-        type="button"
-        title="AI Scheduler"
-        @click="emit('open-scheduler')"
-      >
-        Schedule
-      </button>
-
-      <GoalMotivationStrip
-        v-if="isDashboard"
-        class="min-w-0 flex-1"
-        :goals="activeGoals"
-        @go-to-goals="emit('go-to-goals')"
-      />
-
-      <button
         v-if="activeList"
-        class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20"
+        class="workspace-view-toolbar__add inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/20"
         type="button"
         title="Add task (N)"
         aria-label="Add task"

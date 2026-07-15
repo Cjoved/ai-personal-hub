@@ -289,8 +289,8 @@ function closeGoalEditor() {
   creatingGoal.value = false
 }
 
-function openCreateHabit() {
-  editingHabit.value = null
+function openCreateHabit(seed = null) {
+  editingHabit.value = seed?.category_id ? { category_id: seed.category_id } : null
   creatingHabit.value = true
 }
 
@@ -785,6 +785,7 @@ async function handleDeleteBudgetCategory(id) {
                 @edit-habit="openEditHabit"
                 @create-from-suggestion="handleHabitSuggestion"
                 @manage-categories="openHabitCategories"
+                @go-section="habitSection = $event"
                 @toast="handleTrackerToast"
               />
             </div>

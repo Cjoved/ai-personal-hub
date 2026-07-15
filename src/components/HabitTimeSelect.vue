@@ -113,14 +113,34 @@ function clearTime() {
 
 async function updateMenuPosition() {
   if (!buttonRef.value || !isOpen.value) return
+  await nextTick()
+  const isMobile = window.matchMedia('(max-width: 767px)').matches
+
+  if (isMobile) {
+    const width = Math.min(20 * 16, window.innerWidth - 24)
+    menuStyle.value = {
+      left: '50%',
+      top: '50%',
+      width: `${width}px`,
+      maxHeight: 'min(88dvh, 28rem)',
+      transform: 'translate(-50%, -50%)',
+      overflowY: 'auto',
+    }
+    return
+  }
+
   const rect = buttonRef.value.getBoundingClientRect()
   const menuHeight = menuRef.value?.offsetHeight || 300
-  const spaceBelow = window.innerHeight - rect.bottom
-  const openUpward = spaceBelow < menuHeight + 12 && rect.top > spaceBelow
+  const menuWidth = Math.min(Math.max(rect.width, 300), window.innerWidth - 16)
+  const pad = 8
+  const spaceBelow = window.innerHeight - rect.bottom - pad
+  const spaceAbove = rect.top - pad
+  const openUpward = spaceBelow < menuHeight + 12 && spaceAbove > spaceBelow
+  const left = Math.min(Math.max(pad, rect.left), window.innerWidth - menuWidth - pad)
 
   menuStyle.value = {
-    left: `${rect.left}px`,
-    width: `${Math.max(rect.width, 300)}px`,
+    left: `${left}px`,
+    width: `${menuWidth}px`,
     top: openUpward ? `${rect.top - 6}px` : `${rect.bottom + 4}px`,
     transform: openUpward ? 'translateY(-100%)' : 'none',
   }

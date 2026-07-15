@@ -32,6 +32,8 @@ const color = ref('#1e40af')
 const icon = ref('other')
 const monthlyLimit = ref('')
 const editingId = ref(null)
+/** Mobile-only: list vs form panes (`view` | `fill`). Desktop shows both. */
+const mobilePane = ref('view')
 
 const iconOptions = FINANCE_CATEGORY_ICONS
 
@@ -44,6 +46,14 @@ function resetCreate() {
   editingId.value = null
 }
 
+function goToView() {
+  mobilePane.value = 'view'
+}
+
+function goToFill() {
+  mobilePane.value = 'fill'
+}
+
 function startEdit(category) {
   editingId.value = category.id
   name.value = category.name
@@ -51,6 +61,22 @@ function startEdit(category) {
   color.value = category.color || '#1e40af'
   icon.value = normalizeCategoryIcon(category.icon)
   monthlyLimit.value = category.monthly_limit != null ? String(category.monthly_limit) : ''
+  goToFill()
+}
+
+function startNew() {
+  resetCreate()
+  goToFill()
+}
+
+function openFillTab() {
+  if (!editingId.value) resetCreate()
+  goToFill()
+}
+
+function cancelEdit() {
+  resetCreate()
+  goToView()
 }
 
 function submit() {
@@ -65,6 +91,7 @@ function submit() {
   if (editingId.value) emit('update', editingId.value, payload)
   else emit('create', payload)
   resetCreate()
+  goToView()
 }
 
 function onKeydown(event) {
@@ -79,6 +106,7 @@ watch(
   (open) => {
     if (open) {
       resetCreate()
+      mobilePane.value = 'view'
       window.addEventListener('keydown', onKeydown)
     } else {
       window.removeEventListener('keydown', onKeydown)
@@ -96,7 +124,8 @@ watch(
       @click.self="emit('close')"
     >
       <div
-        class="finance-modal-panel finance-modal-panel--landscape"
+        class="finance-modal-panel finance-modal-panel--landscape finance-cat-modal"
+        :data-mobile-pane="mobilePane"
         role="dialog"
         aria-modal="true"
         aria-labelledby="budget-cat-modal-title"
@@ -118,6 +147,33 @@ watch(
           </button>
         </header>
 
+        <div
+          class="finance-cat-mobile-tabs"
+          role="tablist"
+          aria-label="Category organizer pages"
+        >
+          <button
+            class="finance-chip"
+            :class="{ 'finance-chip--active': mobilePane === 'view' }"
+            type="button"
+            role="tab"
+            :aria-selected="mobilePane === 'view'"
+            @click="goToView"
+          >
+            View
+          </button>
+          <button
+            class="finance-chip"
+            :class="{ 'finance-chip--active': mobilePane === 'fill' }"
+            type="button"
+            role="tab"
+            :aria-selected="mobilePane === 'fill'"
+            @click="openFillTab"
+          >
+            Fill
+          </button>
+        </div>
+
         <p
           v-if="errorMessage"
           class="mx-5 mb-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200 sm:mx-6"
@@ -135,7 +191,19 @@ watch(
 
             <div v-if="!categories.length" class="finance-cat-layout__empty">
               <p class="font-semibold">No categories yet</p>
-              <p class="type-caption type-muted mt-1">Use the form on the right to add your first one.</p>
+              <p class="type-caption type-muted mt-1 finance-cat-layout__empty-hint--desktop">
+                Use the form on the right to add your first one.
+              </p>
+              <p class="type-caption type-muted mt-1 finance-cat-layout__empty-hint--mobile">
+                Tap Fill to add your first category.
+              </p>
+              <button
+                class="finance-primary-btn finance-cat-layout__empty-cta mt-3"
+                type="button"
+                @click="startNew"
+              >
+                Fill new category
+              </button>
             </div>
 
             <ul v-else class="finance-cat-layout__items">
@@ -163,25 +231,25 @@ watch(
                 </span>
                 <span class="finance-cat-layout__item-actions">
                   <button
-                    class="finance-action-btn !h-9 !w-9 !min-h-0 !min-w-0"
+                    class="finance-action-btn"
                     type="button"
                     aria-label="Edit category"
                     title="Edit"
                     @click="startEdit(category)"
                   >
-                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                     </svg>
                   </button>
                   <button
-                    class="finance-action-btn finance-action-btn--danger !h-9 !w-9 !min-h-0 !min-w-0"
+                    class="finance-action-btn finance-action-btn--danger"
                     type="button"
                     aria-label="Delete category"
                     title="Delete"
                     @click="emit('delete', category.id)"
                   >
-                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <path d="M3 6h18" />
                       <path d="M8 6V4h8v2" />
                       <path d="M19 6l-1 14H6L5 6" />
@@ -279,7 +347,7 @@ watch(
               <button
                 class="finance-modal-secondary"
                 type="button"
-                @click="resetCreate"
+                @click="cancelEdit"
               >
                 Cancel edit
               </button>
@@ -287,7 +355,7 @@ watch(
           </form>
         </div>
 
-        <footer class="finance-modal-footer">
+        <footer class="finance-modal-footer finance-cat-modal__footer">
           <button
             class="finance-primary-btn disabled:opacity-50"
             type="button"

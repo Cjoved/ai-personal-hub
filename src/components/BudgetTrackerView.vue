@@ -74,6 +74,7 @@ function closeModal() {
   openModal.value = null
   editingAccountId.value = null
   accountForm.value = { name: '', account_type: 'cash', opening_balance: '' }
+  resetDailyLimitForm()
 }
 
 const {
@@ -97,6 +98,7 @@ const {
   monthSummary,
   categoryProgress,
   overLimitCategories,
+  dailyLimitProgress,
   spendDonutSegments,
   incomeExpenseBars,
   portfolioRows,
@@ -151,6 +153,102 @@ const dividendForm = ref({ holding_id: '', amount: '', paid_on: new Date().toISO
 const goalForm = ref({ name: '', target_amount: '', current_amount: '0', due_on: '' })
 const liabilityForm = ref({ name: '', balance: '', apr: '', min_payment: '' })
 const paydownForm = ref({ id: '', amount: '' })
+
+const dailyLimitForm = ref({
+  account_id: '',
+  schedule: 'daily',
+  target_days: [],
+  amount: '',
+  note: '',
+})
+
+const DAILY_LIMIT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const dailyLimitScheduleOptions = [
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'custom_days', label: 'Custom days' },
+]
+
+function resetDailyLimitForm() {
+  const firstAccount = activeAccounts.value?.[0]
+  dailyLimitForm.value = {
+    account_id: firstAccount?.id || '',
+    schedule: 'daily',
+    target_days: [],
+    amount: '',
+    note: '',
+  }
+}
+
+function openDailyLimitModal(row = null) {
+  if (row) {
+    const schedule =
+      row.schedule === 'custom_days' || row.schedule === 'weekly' ? row.schedule : 'daily'
+    dailyLimitForm.value = {
+      account_id: row.account_id || '',
+      schedule,
+      target_days: Array.isArray(row.target_days) ? [...row.target_days] : [],
+      amount: row.limit != null ? String(row.limit) : '',
+      note: row.note || '',
+    }
+  } else {
+    resetDailyLimitForm()
+  }
+  openModal.value = 'daily-limit'
+}
+
+function setDailyLimitSchedule(next) {
+  dailyLimitForm.value.schedule = next
+  if (next !== 'custom_days') dailyLimitForm.value.target_days = []
+}
+
+function toggleDailyLimitDay(day) {
+  const current = dailyLimitForm.value.target_days || []
+  dailyLimitForm.value.target_days = current.includes(day)
+    ? current.filter((item) => item !== day)
+    : [...current, day].sort((a, b) => a - b)
+}
+
+const dailyLimitFormValid = computed(() => {
+  if (!dailyLimitForm.value.account_id) return false
+  if (!(Number(dailyLimitForm.value.amount) > 0)) return false
+  if (dailyLimitForm.value.schedule === 'custom_days' && !dailyLimitForm.value.target_days.length) {
+    return false
+  }
+  return true
+})
+
+async function onSaveDailyLimit() {
+  if (isBusy.value || !dailyLimitFormValid.value) return
+  isBusy.value = true
+  const ok = await props.api.upsertDailyLimit({
+    account_id: dailyLimitForm.value.account_id,
+    schedule: dailyLimitForm.value.schedule,
+    target_days: dailyLimitForm.value.target_days,
+    amount: Number(dailyLimitForm.value.amount),
+    note: dailyLimitForm.value.note,
+  })
+  emit('toast', {
+    type: ok ? 'success' : 'error',
+    message: ok ? 'Spend limit saved' : props.api.errorMessage.value || 'Could not save limit.',
+  })
+  if (ok) {
+    resetDailyLimitForm()
+    openModal.value = null
+  }
+  isBusy.value = false
+}
+
+async function onDeleteDailyLimit(row) {
+  if (isBusy.value || !row?.id) return
+  isBusy.value = true
+  const ok = await props.api.deleteDailyLimit(row.id)
+  emit('toast', {
+    type: ok ? 'success' : 'error',
+    message: ok ? 'Daily limit removed' : props.api.errorMessage.value || 'Could not remove daily limit.',
+  })
+  isBusy.value = false
+}
 
 const accountTypeOptions = [
   { value: 'cash', label: 'Cash' },
@@ -1441,7 +1539,9 @@ async function onCreateFromProposal(proposal) {
             <div class="min-w-0">
               <p class="finance-kicker">Spend smarter</p>
               <h1 class="finance-hero-title mt-1">Budget</h1>
-              <p class="finance-modal-subtitle finance-budget-hero-sub mt-1">Category limits and recurring bills.</p>
+              <p class="finance-modal-subtitle finance-budget-hero-sub mt-1">
+                Daily and weekly account caps, then monthly category limits.
+              </p>
             </div>
             <div class="finance-budget-hero-actions flex flex-wrap items-center gap-3">
               <template v-if="budgetTab === 'limits'">
@@ -1472,6 +1572,14 @@ async function onCreateFromProposal(proposal) {
                     </svg>
                   </button>
                 </div>
+                <button
+                  class="finance-primary-btn"
+                  type="button"
+                  @click="openDailyLimitModal()"
+                >
+                  <span class="finance-primary-btn__full">Set spend limit</span>
+                  <span class="finance-primary-btn__short">Limit</span>
+                </button>
                 <button
                   class="finance-primary-btn"
                   type="button"
@@ -1515,6 +1623,152 @@ async function onCreateFromProposal(proposal) {
         </section>
 
         <template v-if="budgetTab === 'limits'">
+          <article class="finance-panel finance-budget-panel">
+            <header class="finance-budget-panel__head">
+              <div>
+                <h3 class="type-card-title">Daily & weekly limits</h3>
+                <p class="type-body-sm type-muted mt-0.5">
+                  Set once per account — every day, this week, or weekdays you pick.
+                </p>
+              </div>
+              <button class="finance-primary-btn" type="button" @click="openDailyLimitModal()">
+                <span class="finance-primary-btn__full">Set spend limit</span>
+                <span class="finance-primary-btn__short">Limit</span>
+              </button>
+            </header>
+
+            <div v-if="!dailyLimitProgress.length" class="finance-empty finance-empty--compact">
+              <p class="font-semibold">No spend limits yet</p>
+              <p class="type-caption type-muted mt-1">
+                Cap an account daily, weekly (Mon–Sun), or only on chosen weekdays.
+              </p>
+              <button class="finance-primary-btn mt-3" type="button" @click="openDailyLimitModal()">
+                Set spend limit
+              </button>
+            </div>
+
+            <div v-else class="finance-limit-grid">
+              <article
+                v-for="row in dailyLimitProgress"
+                :key="row.id"
+                class="finance-limit-card finance-limit-card--daily"
+                :class="`finance-limit-card--${row.appliesToday ? progressTone(row) : 'ok'}`"
+                :style="{ '--limit-accent': row.over ? '#b91c1c' : row.accountColor || '#0f766e' }"
+              >
+                <span class="finance-limit-card__glow" aria-hidden="true"></span>
+
+                <span
+                  class="finance-limit-card__icon"
+                  aria-hidden="true"
+                  :style="{ background: `color-mix(in srgb, ${row.accountColor || '#0f766e'} 18%, transparent)` }"
+                >
+                  <svg class="finance-cat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="6" width="18" height="12" rx="2" />
+                    <path d="M3 10h18" />
+                  </svg>
+                </span>
+
+                <div class="finance-limit-card__body">
+                  <div class="finance-limit-card__row">
+                    <h3 class="finance-limit-card__name">{{ row.accountName }}</h3>
+                    <div class="finance-limit-card__top-end">
+                      <span
+                        class="finance-limit-card__status"
+                        :class="`finance-limit-card__status--${row.appliesToday ? progressTone(row) : 'ok'}`"
+                      >
+                        <template v-if="!row.appliesToday">Off today</template>
+                        <template v-else-if="row.over">Over</template>
+                        <template v-else-if="progressTone(row) === 'warn'">Near</template>
+                        <template v-else>On track</template>
+                      </span>
+                      <div class="finance-limit-card__actions">
+                        <button
+                          class="finance-action-btn"
+                          type="button"
+                          aria-label="Edit spend limit"
+                          title="Edit"
+                          :disabled="isBusy"
+                          @click="openDailyLimitModal(row)"
+                        >
+                          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                        </button>
+                        <button
+                          class="finance-action-btn finance-action-btn--danger"
+                          type="button"
+                          aria-label="Remove spend limit"
+                          title="Remove"
+                          :disabled="isBusy"
+                          @click="onDeleteDailyLimit(row)"
+                        >
+                          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M3 6h18" />
+                            <path d="M8 6V4h8v2" />
+                            <path d="M19 6l-1 14H6L5 6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p class="finance-limit-card__meta">
+                    <span class="finance-limit-card__meta-primary">{{ row.scheduleLabel }}</span>
+                    <span v-if="row.appliesToday" class="finance-limit-card__meta-detail">
+                      <span aria-hidden="true"> · </span>
+                      <template v-if="row.over">Over by {{ formatMoney(Math.abs(row.remaining)) }}</template>
+                      <template v-else>
+                        {{ formatMoney(row.remaining) }}
+                        {{ row.isWeekly ? 'left this week' : 'left today' }}
+                      </template>
+                      <span aria-hidden="true"> · </span>
+                      <span class="tabular-nums">{{ formatMoney(row.spent) }} / {{ formatMoney(row.limit) }}</span>
+                    </span>
+                    <span v-else class="finance-limit-card__meta-detail">
+                      <span aria-hidden="true"> · </span>
+                      Not scheduled today
+                    </span>
+                  </p>
+
+                  <div class="finance-limit-card__figures">
+                    <div>
+                      <span class="finance-limit-card__label">
+                        {{ row.isWeekly ? 'Spent this week' : row.appliesToday ? 'Spent today' : 'Cap' }}
+                      </span>
+                      <p class="finance-limit-card__spent tabular-nums">
+                        {{ row.appliesToday || row.isWeekly ? formatMoney(row.spent) : formatMoney(row.limit) }}
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <span class="finance-limit-card__label">{{ row.isWeekly ? 'Week limit' : 'Day limit' }}</span>
+                      <p class="finance-limit-card__limit tabular-nums">{{ formatMoney(row.limit) }}</p>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="row.appliesToday"
+                    class="finance-limit-meter"
+                    role="meter"
+                    :aria-valuenow="row.pct"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    :aria-label="`${row.accountName} spend limit used`"
+                  >
+                    <span
+                      class="finance-limit-meter__fill"
+                      :style="{ width: `${Math.min(Math.max(row.pct, row.spent > 0 ? 3 : 0), 100)}%` }"
+                    />
+                  </div>
+                  <p v-if="row.appliesToday" class="finance-limit-card__pct tabular-nums">
+                    {{ row.pct }}% used
+                  </p>
+                  <p v-if="row.note" class="type-caption type-muted mt-1">{{ row.note }}</p>
+                </div>
+              </article>
+            </div>
+          </article>
+
           <article class="finance-panel finance-budget-panel">
             <header class="finance-budget-panel__head">
               <div>
@@ -2277,6 +2531,130 @@ async function onCreateFromProposal(proposal) {
               :disabled="isBusy || !accountForm.name.trim()"
             >
               {{ editingAccountId ? 'Save changes' : 'Add account' }}
+            </button>
+          </footer>
+        </form>
+      </div>
+
+      <!-- Daily spend limit -->
+      <div
+        v-if="openModal === 'daily-limit'"
+        class="finance-modal-backdrop"
+        @click.self="closeModal"
+      >
+        <form
+          class="finance-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-daily-limit-title"
+          @submit.prevent="onSaveDailyLimit"
+        >
+          <div class="finance-modal-handle" aria-hidden="true"></div>
+          <header class="finance-modal-header">
+            <div>
+              <p class="finance-kicker">Budget</p>
+              <h2 id="modal-daily-limit-title" class="finance-modal-title">Spend limit</h2>
+              <p class="finance-modal-subtitle">
+                One rule per account — Daily, Weekly (Mon–Sun), or Custom days.
+              </p>
+            </div>
+            <button class="finance-modal-close" type="button" aria-label="Close modal" @click="closeModal">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </header>
+          <div class="finance-modal-body">
+            <section class="finance-modal-section">
+              <div class="finance-modal-section__head">
+                <span class="finance-modal-step">1</span>
+                <div>
+                  <h4 class="finance-modal-section__title">Account & schedule</h4>
+                  <p class="finance-modal-section__hint">Pick the wallet, then when the cap applies.</p>
+                </div>
+              </div>
+              <div class="finance-form-grid finance-form-grid--2">
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-daily-limit-account">Account</label>
+                  <FinanceSelect
+                    id="modal-daily-limit-account"
+                    v-model="dailyLimitForm.account_id"
+                    :options="accountSelectOptionsWithPlaceholder"
+                    aria-label="Account for spend limit"
+                    placeholder="Select account"
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <p class="finance-label" id="modal-daily-limit-schedule-label">Schedule</p>
+                  <div
+                    class="finance-chip-group mt-1"
+                    role="radiogroup"
+                    aria-labelledby="modal-daily-limit-schedule-label"
+                  >
+                    <button
+                      v-for="option in dailyLimitScheduleOptions"
+                      :key="option.id"
+                      class="finance-chip"
+                      :class="{ 'finance-chip--active': dailyLimitForm.schedule === option.id }"
+                      type="button"
+                      role="radio"
+                      :aria-checked="dailyLimitForm.schedule === option.id"
+                      @click="setDailyLimitSchedule(option.id)"
+                    >
+                      {{ option.label }}
+                    </button>
+                  </div>
+                  <div v-if="dailyLimitForm.schedule === 'custom_days'" class="mt-3">
+                    <p class="finance-label">Days</p>
+                    <div class="flex flex-wrap gap-2 mt-1">
+                      <button
+                        v-for="(label, day) in DAILY_LIMIT_WEEKDAYS"
+                        :key="day"
+                        class="habit-day-btn"
+                        :class="{ 'habit-day-btn--active': dailyLimitForm.target_days.includes(day) }"
+                        type="button"
+                        :aria-pressed="dailyLimitForm.target_days.includes(day)"
+                        @click="toggleDailyLimitDay(day)"
+                      >
+                        {{ label.slice(0, 1) }}
+                      </button>
+                    </div>
+                  </div>
+                  <p v-else-if="dailyLimitForm.schedule === 'weekly'" class="type-caption type-muted mt-2">
+                    Counters Mon–Sun expenses from this account, then resets next Monday.
+                  </p>
+                </div>
+                <div class="finance-field">
+                  <label class="finance-label" for="modal-daily-limit-amount">
+                    {{ dailyLimitForm.schedule === 'weekly' ? 'Limit per week' : 'Limit per day' }}
+                  </label>
+                  <FinanceMoneyInput
+                    id="modal-daily-limit-amount"
+                    v-model="dailyLimitForm.amount"
+                    min="0.01"
+                    required
+                  />
+                </div>
+                <div class="finance-field sm:col-span-2">
+                  <label class="finance-label" for="modal-daily-limit-note">Note</label>
+                  <input
+                    id="modal-daily-limit-note"
+                    v-model="dailyLimitForm.note"
+                    class="finance-input"
+                    type="text"
+                    maxlength="120"
+                    placeholder="Optional — e.g. weekend allowance"
+                  />
+                </div>
+              </div>
+            </section>
+          </div>
+          <footer class="finance-modal-footer">
+            <button class="finance-modal-secondary" type="button" @click="closeModal">Cancel</button>
+            <button
+              class="finance-primary-btn disabled:opacity-50"
+              type="submit"
+              :disabled="isBusy || !dailyLimitFormValid"
+            >
+              Save spend limit
             </button>
           </footer>
         </form>

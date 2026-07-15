@@ -1,8 +1,16 @@
 <script setup>
 import { computed, onMounted, ref, toRef, watch } from 'vue'
 import HabitAiPanel from './HabitAiPanel.vue'
+import HabitJournalPanel from './HabitJournalPanel.vue'
 import LiveTrendChart from './LiveTrendChart.vue'
-import { formatReminderTime, frequencyLabel, monthCompletionForHabit } from '../composables/useHabits'
+import {
+  formatReminderTime,
+  frequencyLabel,
+  isHabitDueOn,
+  monthCompletionForHabit,
+  shiftDateKey,
+} from '../composables/useHabits'
+import { useHabitDurationTimer } from '../composables/useHabitDurationTimer'
 import { useHabitNotifications } from '../composables/useHabitNotifications'
 import { supabase } from '../lib/supabase'
 
@@ -17,11 +25,21 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['create-habit', 'edit-habit', 'manage-categories', 'toast', 'create-from-suggestion'])
+const emit = defineEmits([
+  'create-habit',
+  'edit-habit',
+  'manage-categories',
+  'toast',
+  'create-from-suggestion',
+  'go-section',
+])
 
 const showToday = computed(() => props.section === 'today' || props.section === 'habits')
-const showInsights = computed(() => props.section === 'insights')
+const showInsights = computed(() => props.section === 'insights' || props.section === 'stats')
+const showJournal = computed(() => props.section === 'journal')
 const showCategories = computed(() => props.section === 'categories')
+
+const expandedCategoryId = ref(null)
 
 const habitRows = toRef(props.api, 'habitRows')
 const categories = toRef(props.api, 'categories')
@@ -155,26 +173,151 @@ const moodChartItems = computed(() =>
   })),
 )
 
-const categoryCards = computed(() => {
-  const rows = activeHabits.value || []
-  const cards = (categories.value || []).map((category) => ({
-    ...category,
-    habitCount: rows.filter((habit) => habit.category_id === category.id).length,
-  }))
-  const uncategorized = rows.filter((habit) => !habit.category_id).length
-  return { cards, uncategorized }
+const categoryHub = computed(() => {
+  const rows = habitRows.value || []
+  const allHabits = activeHabits.value || []
+  const map = checksByHabit.value
+  const today = todayKey.value
+
+  function habitPulse(habits) {
+    const due = habits.filter((habit) => isHabitDueOn(habit, today, map))
+    const done = due.filter((habit) => (map?.get?.(habit.id) || new Set()).has(today))
+    let weekDue = 0
+    let weekDone = 0
+    for (let i = 0; i < 7; i += 1) {
+      const key = shiftDateKey(today, -i)
+      for (const habit of habits) {
+        if (!isHabitDueOn(habit, key, map)) continue
+        weekDue += 1
+        if ((map?.get?.(habit.id) || new Set()).has(key)) weekDone += 1
+      }
+    }
+    return {
+      dueToday: due.length,
+      doneToday: done.length,
+      weekPct: weekDue ? Math.round((weekDone / weekDue) * 100) : 0,
+    }
+  }
+
+  function rowForHabit(habit) {
+    return rows.find((row) => row.habit.id === habit.id) || null
+  }
+
+  const cards = (categories.value || []).map((category) => {
+    const habits = allHabits.filter((habit) => habit.category_id === category.id)
+    const pulse = habitPulse(habits)
+    return {
+      ...category,
+      habitCount: habits.length,
+      habits: habits.map((habit) => {
+        const row = rowForHabit(habit)
+        return {
+          id: habit.id,
+          title: habit.title,
+          habit,
+          streak: row?.streaks?.current || 0,
+          dueToday: row?.dueToday || false,
+          checkedToday: row?.checkedToday || false,
+        }
+      }),
+      ...pulse,
+    }
+  })
+
+  const uncategorizedHabits = allHabits.filter((habit) => !habit.category_id)
+  const uncategorizedPulse = habitPulse(uncategorizedHabits)
+
+  return {
+    cards,
+    uncategorized: uncategorizedHabits.length,
+    uncategorizedHabits: uncategorizedHabits.map((habit) => {
+      const row = rowForHabit(habit)
+      return {
+        id: habit.id,
+        title: habit.title,
+        habit,
+        streak: row?.streaks?.current || 0,
+        dueToday: row?.dueToday || false,
+        checkedToday: row?.checkedToday || false,
+      }
+    }),
+    uncategorizedPulse,
+    totals: {
+      categories: cards.length,
+      habits: allHabits.length,
+      uncategorized: uncategorizedHabits.length,
+    },
+  }
 })
+
+function toggleCategoryExpand(id) {
+  expandedCategoryId.value = expandedCategoryId.value === id ? null : id
+}
+
+function viewCategoryOnToday(categoryId) {
+  selectedCategoryId.value = categoryId
+  emit('go-section', 'today')
+}
+
+function createHabitInCategory(categoryId = null) {
+  emit('create-habit', categoryId ? { category_id: categoryId } : null)
+}
+
+async function onDurationComplete(habitId) {
+  const row = (habitRows.value || []).find((item) => item.habit.id === habitId)
+  const fromActive = (props.api.activeHabits?.value || []).find((habit) => habit.id === habitId)
+  const habit = row?.habit || fromActive
+  if (!habit) return
+  const ok = await props.api.logCheck(habitId, {
+    value: habit.target_value != null ? Number(habit.target_value) : null,
+    status: 'completed',
+  })
+  if (!ok && props.api.errorMessage.value) {
+    emit('toast', { type: 'error', message: props.api.errorMessage.value })
+    return
+  }
+  emit('toast', { type: 'success', message: `${habit.title} done` })
+}
+
+const durationTimer = useHabitDurationTimer({
+  todayKey,
+  onComplete: onDurationComplete,
+})
+
+function isDurationHabit(row) {
+  return row?.habit?.habit_type === 'duration'
+}
+
+function isDurationRunning(row) {
+  return durationTimer.isActiveFor(row.habit.id)
+}
 
 async function onToggle(row) {
   if (!row.dueToday) return
-  if (row.habit.habit_type && row.habit.habit_type !== 'boolean' && !row.checkedToday) {
+
+  // Duration: Start → countdown → auto complete (undo still uses toggle when checked)
+  if (isDurationHabit(row) && !row.checkedToday) {
+    if (isDurationRunning(row)) return
+    if (durationTimer.isRunning.value && durationTimer.activeHabitId.value !== row.habit.id) {
+      durationTimer.cancel()
+    }
+    durationTimer.start(row.habit)
+    return
+  }
+
+  if (row.habit.habit_type === 'quantity' && !row.checkedToday) {
     openLogPanel(row)
     return
   }
+
   const ok = await props.api.toggleCheck(row.habit.id)
   if (!ok && props.api.errorMessage.value) {
     emit('toast', { type: 'error', message: props.api.errorMessage.value })
   }
+}
+
+function cancelDurationTimer() {
+  durationTimer.cancel()
 }
 
 function openLogPanel(row, dateKey = null) {
@@ -420,22 +563,47 @@ watch(
           @click="focusHabitId = row.habit.id"
         >
           <div class="habit-row-main flex items-start gap-3">
-            <button
-              class="habit-check-circle"
-              :class="{
-                'habit-check-circle--done': row.checkedToday,
-                'habit-check-circle--muted': !row.dueToday,
-              }"
-              type="button"
-              :aria-label="row.checkedToday ? `Undo check-in for ${row.habit.title}` : `Check in ${row.habit.title}`"
-              :disabled="!row.dueToday"
-              :style="{ '--habit-color': row.habit.color || 'var(--habit-done)' }"
-              @click.stop="onToggle(row)"
-            >
-              <svg v-if="row.checkedToday" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            </button>
+            <div class="habit-check-wrap shrink-0">
+              <button
+                class="habit-check-circle"
+                :class="{
+                  'habit-check-circle--done': row.checkedToday,
+                  'habit-check-circle--muted': !row.dueToday,
+                  'habit-check-circle--start': isDurationHabit(row) && row.dueToday && !row.checkedToday && !isDurationRunning(row),
+                  'habit-check-circle--timer': isDurationRunning(row),
+                }"
+                type="button"
+                :aria-label="
+                  row.checkedToday
+                    ? `Undo check-in for ${row.habit.title}`
+                    : isDurationRunning(row)
+                      ? `Duration timer for ${row.habit.title}`
+                      : isDurationHabit(row)
+                        ? `Start ${row.habit.title}`
+                        : `Check in ${row.habit.title}`
+                "
+                :disabled="!row.dueToday || isDurationRunning(row)"
+                :style="{ '--habit-color': row.habit.color || 'var(--habit-done)' }"
+                @click.stop="onToggle(row)"
+              >
+                <svg v-if="row.checkedToday" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                <span v-else-if="isDurationRunning(row)" class="habit-check-circle__timer tabular-nums">
+                  {{ durationTimer.displayLabel }}
+                </span>
+                <span v-else-if="isDurationHabit(row) && row.dueToday" class="habit-check-circle__start">Start</span>
+              </button>
+              <button
+                v-if="isDurationRunning(row)"
+                class="habit-timer-cancel"
+                type="button"
+                aria-label="Cancel duration timer"
+                @click.stop="cancelDurationTimer"
+              >
+                Cancel
+              </button>
+            </div>
 
             <div class="habit-row-body min-w-0 flex-1">
               <div class="habit-row-top flex items-start justify-between gap-2">
@@ -483,6 +651,7 @@ watch(
                     class="habit-week-dot"
                     :class="{
                       'habit-week-dot--checked': day.checked,
+                      'habit-week-dot--missed': day.missed,
                       'habit-week-dot--today': day.isToday,
                       'habit-week-dot--skip': !day.due,
                     }"
@@ -664,6 +833,7 @@ watch(
                   class="habit-heat-cell"
                   :class="{
                     'habit-heat-cell--checked': cell.checked,
+                    'habit-heat-cell--missed': cell.missed,
                     'habit-heat-cell--skip': !cell.due,
                   }"
                   type="button"
@@ -799,6 +969,11 @@ watch(
       </div>
     </template>
 
+    <!-- JOURNAL -->
+    <template v-else-if="showJournal">
+      <HabitJournalPanel :api="api" @toast="emit('toast', $event)" />
+    </template>
+
     <!-- CATEGORIES -->
     <template v-else-if="showCategories">
       <header class="habits-hero rounded-3xl p-5 sm:p-6">
@@ -807,8 +982,13 @@ watch(
             <p class="habits-kicker">Organize</p>
             <h2 class="habits-hero-title mt-1">Categories</h2>
             <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              Group habits by Health, Focus, Lifestyle, or your own labels.
+              Browse habits by group, then jump back to Today to check in.
             </p>
+            <div class="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <span class="habits-chip habits-chip--tiny">{{ categoryHub.totals.categories }} categories</span>
+              <span class="habits-chip habits-chip--tiny">{{ categoryHub.totals.habits }} habits</span>
+              <span class="habits-chip habits-chip--tiny">{{ categoryHub.totals.uncategorized }} uncategorized</span>
+            </div>
           </div>
           <button class="habits-primary-btn" type="button" @click="emit('manage-categories')">
             Manage categories
@@ -818,24 +998,129 @@ watch(
 
       <div class="grid gap-3 sm:grid-cols-2">
         <article
-          v-for="category in categoryCards.cards"
+          v-for="category in categoryHub.cards"
           :key="category.id"
-          class="habits-category-card rounded-2xl p-4"
+          class="habits-category-card habits-category-card--hub rounded-2xl p-4"
+          :style="{ '--category-accent': category.color || '#f59e0b' }"
         >
-          <div class="flex items-center gap-3">
-            <span class="h-10 w-10 rounded-2xl shadow-inner" :style="{ background: category.color || '#f59e0b' }"></span>
-            <div class="min-w-0">
+          <button
+            class="flex w-full items-center gap-3 text-left"
+            type="button"
+            :aria-expanded="expandedCategoryId === category.id"
+            @click="toggleCategoryExpand(category.id)"
+          >
+            <span class="h-10 w-10 shrink-0 rounded-2xl shadow-inner" :style="{ background: category.color || '#f59e0b' }"></span>
+            <div class="min-w-0 flex-1">
               <strong class="block truncate text-slate-950 dark:text-slate-50">{{ category.name }}</strong>
               <p class="text-xs text-slate-500">
                 {{ category.habitCount }} habit{{ category.habitCount === 1 ? '' : 's' }}
+                <template v-if="category.dueToday">
+                  · {{ category.doneToday }}/{{ category.dueToday }} due today
+                </template>
+                · {{ category.weekPct }}% week
               </p>
+            </div>
+            <svg
+              class="h-4 w-4 shrink-0 text-slate-400 transition"
+              :class="{ 'rotate-180': expandedCategoryId === category.id }"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          <div v-if="expandedCategoryId === category.id" class="mt-3 space-y-2 border-t border-slate-200/80 pt-3 dark:border-slate-700/80">
+            <div v-if="!category.habits.length" class="rounded-xl bg-slate-50 px-3 py-3 text-center dark:bg-slate-900/60">
+              <p class="text-sm text-slate-500">No habits here yet</p>
+              <button class="habits-primary-btn mt-2" type="button" @click="createHabitInCategory(category.id)">
+                Create habit
+              </button>
+            </div>
+            <ul v-else class="space-y-1.5">
+              <li
+                v-for="item in category.habits"
+                :key="item.id"
+                class="flex items-center justify-between gap-2 rounded-xl px-2.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-900/50"
+              >
+                <button class="min-w-0 flex-1 text-left" type="button" @click="emit('edit-habit', item.habit)">
+                  <span class="block truncate text-sm font-bold text-slate-900 dark:text-slate-100">{{ item.title }}</span>
+                  <span class="text-[0.7rem] text-slate-500">
+                    {{ item.streak }} day streak
+                    <template v-if="item.dueToday"> · {{ item.checkedToday ? 'done today' : 'due today' }}</template>
+                  </span>
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <button class="habits-ghost-btn" type="button" @click="viewCategoryOnToday(category.id)">
+                View on Today
+              </button>
+              <button class="habits-ghost-btn" type="button" @click="createHabitInCategory(category.id)">
+                Add habit
+              </button>
             </div>
           </div>
         </article>
 
-        <article class="habits-category-card rounded-2xl border-dashed p-4">
-          <strong class="block text-slate-950 dark:text-slate-50">Uncategorized</strong>
-          <p class="text-xs text-slate-500">{{ categoryCards.uncategorized }} habit{{ categoryCards.uncategorized === 1 ? '' : 's' }}</p>
+        <article class="habits-category-card habits-category-card--hub rounded-2xl border-dashed p-4">
+          <button
+            class="flex w-full items-center gap-3 text-left"
+            type="button"
+            :aria-expanded="expandedCategoryId === 'none'"
+            @click="toggleCategoryExpand('none')"
+          >
+            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-slate-800">?</span>
+            <div class="min-w-0 flex-1">
+              <strong class="block text-slate-950 dark:text-slate-50">Uncategorized</strong>
+              <p class="text-xs text-slate-500">
+                {{ categoryHub.uncategorized }} habit{{ categoryHub.uncategorized === 1 ? '' : 's' }}
+                <template v-if="categoryHub.uncategorizedPulse.dueToday">
+                  · {{ categoryHub.uncategorizedPulse.doneToday }}/{{ categoryHub.uncategorizedPulse.dueToday }} due today
+                </template>
+              </p>
+            </div>
+            <svg
+              class="h-4 w-4 shrink-0 text-slate-400 transition"
+              :class="{ 'rotate-180': expandedCategoryId === 'none' }"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          <div v-if="expandedCategoryId === 'none'" class="mt-3 space-y-2 border-t border-slate-200/80 pt-3 dark:border-slate-700/80">
+            <div v-if="!categoryHub.uncategorizedHabits.length" class="px-1 py-2 text-sm text-slate-500">
+              All habits have a category.
+            </div>
+            <ul v-else class="space-y-1.5">
+              <li
+                v-for="item in categoryHub.uncategorizedHabits"
+                :key="item.id"
+                class="flex items-center justify-between gap-2 rounded-xl px-2.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-900/50"
+              >
+                <button class="min-w-0 flex-1 text-left" type="button" @click="emit('edit-habit', item.habit)">
+                  <span class="block truncate text-sm font-bold text-slate-900 dark:text-slate-100">{{ item.title }}</span>
+                  <span class="text-[0.7rem] text-slate-500">Edit to assign a category</span>
+                </button>
+              </li>
+            </ul>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <button class="habits-ghost-btn" type="button" @click="viewCategoryOnToday('none')">
+                View on Today
+              </button>
+              <button class="habits-ghost-btn" type="button" @click="createHabitInCategory(null)">
+                Add habit
+              </button>
+            </div>
+          </div>
         </article>
       </div>
     </template>

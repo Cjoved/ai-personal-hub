@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import AppLogo from './AppLogo.vue'
 import SidebarAccountFooter from './SidebarAccountFooter.vue'
+import { useConfirm } from '../composables/useConfirm'
 
 const props = defineProps({
   spaces: {
@@ -51,6 +52,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select-dashboard', 'select-spaces', 'select-goals', 'select-space', 'select-list', 'open-system-picker', 'close', 'open-settings', 'sign-out'])
+
+const { confirmDelete } = useConfirm()
 
 const expandedSpaceIds = ref(new Set())
 const addingSpaceId = ref(null)
@@ -108,6 +111,9 @@ async function saveListEdit(listId) {
 
 async function removeList(listId) {
   if (!props.deleteList) return
+  const list = props.lists.find((item) => item.id === listId)
+  const confirmed = await confirmDelete('list', list?.name)
+  if (!confirmed) return
   await props.deleteList(listId)
 }
 

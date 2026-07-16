@@ -3,8 +3,8 @@ import { computed, ref, toRef, watch } from 'vue'
 import {
   JOURNAL_PROMPTS,
   emptyDailyJournal,
+  habitDayKey,
   journalFilledCount,
-  localDateKey,
   shiftDateKey,
 } from '../composables/useHabits'
 import FinanceDateInput from './FinanceDateInput.vue'
@@ -23,9 +23,10 @@ const isSaving = toRef(props.api, 'isSaving')
 const journalFeed = toRef(props.api, 'journalFeed')
 const checkInJournalEntries = toRef(props.api, 'checkInJournalEntries')
 
-const selectedDate = ref(localDateKey())
+const selectedDate = ref(habitDayKey())
 const form = ref(emptyDailyJournal())
 const isDirty = ref(false)
+const modalMode = ref(null) // null | 'edit' | 'view'
 
 const moodOptions = [1, 2, 3, 4, 5]
 
@@ -62,6 +63,12 @@ const checkInGroups = computed(() => {
   return [...groups.entries()]
     .sort((a, b) => String(b[0]).localeCompare(String(a[0])))
     .map(([dateKey, entries]) => ({ dateKey, entries }))
+})
+
+const modalTitle = computed(() => {
+  if (modalMode.value === 'view') return 'View journal'
+  if (form.value.id) return 'Edit journal'
+  return 'Fill up'
 })
 
 function loadDate(dateKey) {
@@ -113,6 +120,31 @@ function sentimentLabel(sentiment) {
   return sentiment.label || sentiment.summary || ''
 }
 
+function openFillUp() {
+  loadDate(selectedDate.value)
+  modalMode.value = 'edit'
+}
+
+function openView(dateKey) {
+  loadDate(dateKey)
+  modalMode.value = 'view'
+}
+
+function openEdit(dateKey) {
+  loadDate(dateKey)
+  modalMode.value = 'edit'
+}
+
+function switchViewToEdit() {
+  modalMode.value = 'edit'
+}
+
+function closeModal() {
+  modalMode.value = null
+  isDirty.value = false
+  loadDate(selectedDate.value)
+}
+
 async function saveJournal() {
   const ok = await props.api.saveDailyJournal({
     journal_on: selectedDate.value,
@@ -131,13 +163,14 @@ async function saveJournal() {
   }
   isDirty.value = false
   loadDate(selectedDate.value)
+  modalMode.value = null
   emit('toast', { type: 'success', message: 'Journal saved' })
 }
 
 watch(
   () => todayKey.value,
   (key) => {
-    if (!isDirty.value) loadDate(key)
+    if (!isDirty.value && !modalMode.value) loadDate(key)
   },
   { immediate: true },
 )
@@ -153,123 +186,77 @@ watch(
           <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
             Same prompts every day — keep, cut, win, and one focus for tomorrow.
           </p>
+          <p class="mt-1 text-xs text-slate-500">Habit day unlocks at 4:00 AM local time.</p>
           <p class="mt-2 text-xs font-bold text-slate-500">
-            {{ filledCount }}/5 filled
+            {{ filledCount }}/5 filled for {{ isToday ? 'today' : formatDay(selectedDate) }}
             <span v-if="coreMissing" class="text-amber-700 dark:text-amber-300">
               · nudge: fill Keep, Cut, and Mood when you can
             </span>
           </p>
         </div>
 
-        <div class="habits-journal-nav flex flex-wrap items-center gap-2">
-          <button class="habits-ghost-btn" type="button" aria-label="Previous day" @click="goDay(-1)">
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </button>
-          <button
-            v-if="!isToday"
-            class="habits-ghost-btn"
-            type="button"
-            @click="loadDate(todayKey)"
-          >
-            Today
-          </button>
-          <button class="habits-ghost-btn" type="button" aria-label="Next day" :disabled="isToday" @click="goDay(1)">
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="m9 18 6-6-6-6" />
-            </svg>
-          </button>
-          <div class="habits-journal-date-input min-w-0 flex-1 sm:min-w-[11rem] sm:flex-none">
-            <FinanceDateInput
-              :model-value="selectedDate"
-              aria-label="Journal date"
-              @update:model-value="loadDate"
-            />
+        <div class="flex flex-col items-stretch gap-2 sm:items-end">
+          <div class="habits-journal-nav flex flex-wrap items-center gap-2">
+            <button class="habits-ghost-btn" type="button" aria-label="Previous day" @click="goDay(-1)">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </button>
+            <button
+              v-if="!isToday"
+              class="habits-ghost-btn"
+              type="button"
+              @click="loadDate(todayKey)"
+            >
+              Today
+            </button>
+            <button class="habits-ghost-btn" type="button" aria-label="Next day" :disabled="isToday" @click="goDay(1)">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </button>
+            <div class="habits-journal-date-input min-w-0 flex-1 sm:min-w-[11rem] sm:flex-none">
+              <FinanceDateInput
+                :model-value="selectedDate"
+                aria-label="Journal date"
+                @update:model-value="loadDate"
+              />
+            </div>
           </div>
+          <button class="habits-primary-btn" type="button" @click="openFillUp">
+            {{ form.id ? 'Edit entry' : 'Fill up' }}
+          </button>
         </div>
       </div>
     </header>
-
-    <article class="habits-journal-card rounded-3xl p-4 sm:p-5">
-      <div class="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <p class="text-xs font-extrabold uppercase tracking-wide text-teal-700/80 dark:text-teal-300/80">
-            {{ isToday ? 'Today' : 'Day' }}
-          </p>
-          <h3 class="mt-0.5 text-lg font-extrabold text-slate-950 dark:text-slate-50">{{ selectedLabel }}</h3>
-        </div>
-        <span class="habits-journal-pill">{{ filledCount }}/5</span>
-      </div>
-
-      <form class="space-y-4" @submit.prevent="saveJournal">
-        <div v-for="prompt in JOURNAL_PROMPTS" :key="prompt.key" class="habits-journal-field">
-          <label class="habit-modal-label" :for="`journal-${prompt.key}`">{{ prompt.label }}</label>
-          <p class="mb-1.5 text-xs text-slate-500">{{ prompt.hint }}</p>
-          <textarea
-            :id="`journal-${prompt.key}`"
-            v-model="form[prompt.key]"
-            class="habit-modal-textarea"
-            rows="2"
-            :placeholder="prompt.placeholder"
-            @input="markDirty"
-          />
-        </div>
-
-        <div class="habits-journal-field">
-          <p class="habit-modal-label">Mood</p>
-          <p class="mb-1.5 text-xs text-slate-500">How was your overall day?</p>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="value in moodOptions"
-              :key="value"
-              class="habits-journal-mood"
-              :class="{ 'habits-journal-mood--active': form.mood === value }"
-              type="button"
-              :aria-pressed="form.mood === value"
-              @click="setMood(value)"
-            >
-              {{ value }}
-            </button>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
-          <button
-            class="habits-primary-btn disabled:opacity-50"
-            type="submit"
-            :disabled="isSaving"
-          >
-            {{ isSaving ? 'Saving…' : 'Save journal' }}
-          </button>
-        </div>
-      </form>
-    </article>
 
     <section class="space-y-3">
       <div class="flex items-end justify-between gap-3">
         <div>
           <h3 class="type-card-title">Past days</h3>
-          <p class="type-caption type-muted mt-0.5">Tap a day to edit its prompts.</p>
+          <p class="type-caption type-muted mt-0.5">View full notes or edit a day.</p>
         </div>
       </div>
 
       <div v-if="!pastCards.length" class="habits-empty rounded-2xl p-5 text-center">
         <p class="font-extrabold text-slate-900 dark:text-slate-100">No learnings yet</p>
-        <p class="mt-1 text-sm text-slate-500">Answer today’s Keep / Cut / Win prompts to start your feed.</p>
+        <p class="mt-1 text-sm text-slate-500">Use Fill up to answer Keep / Cut / Win prompts.</p>
+        <button class="habits-primary-btn mt-3" type="button" @click="openFillUp">Fill up</button>
       </div>
 
       <div v-else class="space-y-2">
-        <button
+        <article
           v-for="row in pastCards"
           :key="row.id || row.journal_on"
           class="habits-journal-day-card w-full rounded-2xl p-3.5 text-left"
           :class="{ 'habits-journal-day-card--active': row.journal_on === selectedDate }"
-          type="button"
-          @click="loadDate(row.journal_on)"
         >
           <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
+            <button
+              class="habits-journal-day-card__body min-w-0 flex-1 text-left"
+              type="button"
+              @click="openView(row.journal_on)"
+            >
               <strong class="block text-sm font-extrabold text-slate-950 dark:text-slate-50">
                 {{ formatDay(row.journal_on) }}
               </strong>
@@ -282,10 +269,38 @@ watch(
               <p v-if="row.win" class="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
                 <span class="font-bold text-amber-700 dark:text-amber-300">Win · </span>{{ truncate(row.win) }}
               </p>
+            </button>
+            <div class="habits-journal-day-card__tools shrink-0">
+              <span v-if="row.mood != null" class="habits-journal-pill">Mood {{ row.mood }}</span>
+              <div class="habits-journal-day-card__actions">
+                <button
+                  class="habits-journal-icon-btn"
+                  type="button"
+                  aria-label="View journal"
+                  title="View"
+                  @click="openView(row.journal_on)"
+                >
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+                <button
+                  class="habits-journal-icon-btn"
+                  type="button"
+                  aria-label="Edit journal"
+                  title="Edit"
+                  @click="openEdit(row.journal_on)"
+                >
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <span v-if="row.mood != null" class="habits-journal-pill shrink-0">Mood {{ row.mood }}</span>
           </div>
-        </button>
+        </article>
       </div>
     </section>
 
@@ -338,5 +353,114 @@ watch(
         </article>
       </div>
     </section>
+
+    <Teleport to="body">
+      <div
+        v-if="modalMode"
+        class="habit-modal-backdrop"
+        role="presentation"
+        @click.self="closeModal"
+      >
+        <div
+          class="habit-modal-panel"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="modalMode === 'view' ? 'journal-view-title' : 'journal-edit-title'"
+        >
+          <div class="habit-modal-handle" aria-hidden="true"></div>
+          <header class="habit-modal-header">
+            <div class="min-w-0">
+              <p class="habits-kicker">{{ isToday ? 'Today' : 'Day' }}</p>
+              <h3
+                :id="modalMode === 'view' ? 'journal-view-title' : 'journal-edit-title'"
+                class="habit-modal-title"
+              >
+                {{ modalTitle }}
+              </h3>
+              <p class="habit-modal-subtitle">{{ selectedLabel }} · {{ filledCount }}/5</p>
+            </div>
+            <button class="habit-modal-close" type="button" aria-label="Close" @click="closeModal">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </header>
+
+          <!-- View mode -->
+          <div v-if="modalMode === 'view'" class="habit-modal-body space-y-4">
+            <div v-for="prompt in JOURNAL_PROMPTS" :key="`view-${prompt.key}`" class="habits-journal-field">
+              <p class="habit-modal-label">{{ prompt.label }}</p>
+              <p class="mb-1.5 text-xs text-slate-500">{{ prompt.hint }}</p>
+              <p class="habits-journal-view-text">
+                {{ String(form[prompt.key] || '').trim() || '—' }}
+              </p>
+            </div>
+            <div class="habits-journal-field">
+              <p class="habit-modal-label">Mood</p>
+              <p class="mb-1.5 text-xs text-slate-500">How was your overall day?</p>
+              <p class="habits-journal-view-text">
+                {{ form.mood != null ? `Mood ${form.mood}` : '—' }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Edit / fill mode -->
+          <form
+            v-else
+            class="habit-modal-body space-y-4"
+            @submit.prevent="saveJournal"
+          >
+            <div v-for="prompt in JOURNAL_PROMPTS" :key="prompt.key" class="habits-journal-field">
+              <label class="habit-modal-label" :for="`journal-modal-${prompt.key}`">{{ prompt.label }}</label>
+              <p class="mb-1.5 text-xs text-slate-500">{{ prompt.hint }}</p>
+              <textarea
+                :id="`journal-modal-${prompt.key}`"
+                v-model="form[prompt.key]"
+                class="habit-modal-textarea"
+                rows="2"
+                :placeholder="prompt.placeholder"
+                @input="markDirty"
+              />
+            </div>
+
+            <div class="habits-journal-field">
+              <p class="habit-modal-label">Mood</p>
+              <p class="mb-1.5 text-xs text-slate-500">How was your overall day?</p>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="value in moodOptions"
+                  :key="value"
+                  class="habits-journal-mood"
+                  :class="{ 'habits-journal-mood--active': form.mood === value }"
+                  type="button"
+                  :aria-pressed="form.mood === value"
+                  @click="setMood(value)"
+                >
+                  {{ value }}
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <footer class="habit-modal-footer">
+            <template v-if="modalMode === 'view'">
+              <button class="habit-modal-secondary" type="button" @click="closeModal">Close</button>
+              <button class="habits-primary-btn" type="button" @click="switchViewToEdit">Edit</button>
+            </template>
+            <template v-else>
+              <button class="habit-modal-secondary" type="button" @click="closeModal">Cancel</button>
+              <button
+                class="habits-primary-btn disabled:opacity-50"
+                type="button"
+                :disabled="isSaving"
+                @click="saveJournal"
+              >
+                {{ isSaving ? 'Saving…' : 'Save journal' }}
+              </button>
+            </template>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

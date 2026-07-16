@@ -1,6 +1,9 @@
 import { computed, ref, watch } from 'vue'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { habitDayKey, localDateKey } from '../lib/localDate'
 import { enqueueHabitCheck, flushHabitOfflineQueue, isOnline } from './habitOfflineQueue'
+
+export { habitDayKey, localDateKey } from '../lib/localDate'
 
 const DEFAULT_HABIT_CATEGORIES = [
   { name: 'Health', color: '#10b981', position: 0 },
@@ -18,13 +21,6 @@ const BADGE_DEFS = [
   { id: 'level_5', label: 'Level 5', test: (ctx) => ctx.level >= 5 },
   { id: 'freeze_saver', label: 'Used a freeze', test: (ctx) => ctx.freezeUsed },
 ]
-
-export function localDateKey(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
 
 export function parseLocalDate(key) {
   const [year, month, day] = String(key).split('-').map(Number)
@@ -403,7 +399,7 @@ export function detectAnomalies(habits, checksByHabit, todayKey = localDateKey()
   return flags
 }
 
-export function moodCorrelation(checks, habits) {
+export function moodCorrelation(checks, habits, journals = []) {
   const byWeekday = Array.from({ length: 7 }, (_, day) => ({
     day,
     label: WEEKDAY_LABELS[day],
@@ -412,23 +408,27 @@ export function moodCorrelation(checks, habits) {
     dueProxy: 0,
   }))
 
-  for (const check of checks) {
+  for (const check of checks || []) {
     if (check.mood == null) continue
     const day = parseLocalDate(check.checked_on).getDay()
     byWeekday[day].moods.push(Number(check.mood))
     if (isCompletedCheck(check)) byWeekday[day].completions += 1
   }
 
-  return byWeekday
-    .map((row) => ({
-      label: row.label,
-      avgMood: row.moods.length
-        ? Math.round((row.moods.reduce((a, b) => a + b, 0) / row.moods.length) * 10) / 10
-        : 0,
-      moodLogs: row.moods.length,
-      completions: row.completions,
-    }))
-    .filter((row) => row.moodLogs > 0)
+  for (const journal of journals || []) {
+    if (journal.mood == null || !journal.journal_on) continue
+    const day = parseLocalDate(journal.journal_on).getDay()
+    byWeekday[day].moods.push(Number(journal.mood))
+  }
+
+  return byWeekday.map((row) => ({
+    label: row.label,
+    avgMood: row.moods.length
+      ? Math.round((row.moods.reduce((a, b) => a + b, 0) / row.moods.length) * 10) / 10
+      : 0,
+    moodLogs: row.moods.length,
+    completions: row.completions,
+  }))
 }
 
 function levelFromXp(xp) {
@@ -518,7 +518,7 @@ export const JOURNAL_PROMPTS = [
   },
 ]
 
-export function emptyDailyJournal(journalOn = localDateKey()) {
+export function emptyDailyJournal(journalOn = habitDayKey()) {
   return {
     id: null,
     journal_on: journalOn,
@@ -543,7 +543,25 @@ export function journalFilledCount(entry) {
 
 export { WEEKDAY_LABELS, XP_PER_LEVEL }
 
+const dayTick = ref(0)
+let dayTickerStarted = false
+
+function ensureHabitDayTicker() {
+  if (dayTickerStarted || typeof window === 'undefined') return
+  dayTickerStarted = true
+  const bump = () => {
+    dayTick.value += 1
+  }
+  window.setInterval(bump, 60_000)
+  window.addEventListener('focus', bump)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') bump()
+  })
+}
+
 export function useHabits(user) {
+  ensureHabitDayTicker()
+
   const categories = ref([])
   const habits = ref([])
   const checks = ref([])
@@ -559,7 +577,10 @@ export function useHabits(user) {
   const offlinePending = ref(0)
 
   const userId = computed(() => user.value?.id)
-  const todayKey = computed(() => localDateKey())
+  const todayKey = computed(() => {
+    void dayTick.value
+    return habitDayKey()
+  })
   const checkMaps = computed(() => buildCheckMaps(checks.value))
   const checksByHabit = computed(() => checkMaps.value.dateSets)
   const freezesByHabit = computed(() => buildFreezeMap(freezes.value))
@@ -671,7 +692,9 @@ export function useHabits(user) {
       .sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)))
   })
 
-  const moodSeries = computed(() => moodCorrelation(checks.value, filteredHabits.value))
+  const moodSeries = computed(() =>
+    moodCorrelation(checks.value, filteredHabits.value, dailyJournals.value),
+  )
 
   async function ensureDefaultCategories() {
     if (!userId.value || categories.value.length) return

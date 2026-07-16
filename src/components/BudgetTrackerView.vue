@@ -11,6 +11,8 @@ import FinanceDateInput from './FinanceDateInput.vue'
 import FinanceHoldingIcon from './FinanceHoldingIcon.vue'
 import { FINANCE_ASSET_CLASSES, assetClassLabel } from '../lib/financeAssetClasses'
 import { formatInvestNumber, formatMoney, shiftMonthKey } from '../composables/useFinance'
+import { localDateKey } from '../lib/localDate'
+import { useConfirm } from '../composables/useConfirm'
 
 const props = defineProps({
   api: {
@@ -24,6 +26,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['create-transaction', 'edit-transaction', 'manage-categories', 'toast'])
+
+const { confirmDelete, confirmArchive } = useConfirm()
 
 const openModal = ref(null)
 const activityTab = defineModel('activityTab', { type: String, default: 'transactions' })
@@ -135,7 +139,7 @@ const transferForm = ref({
   to_account_id: '',
   amount: '',
   note: '',
-  occurred_on: new Date().toISOString().slice(0, 10),
+  occurred_on: localDateKey(),
 })
 const recurringForm = ref({
   name: '',
@@ -144,7 +148,7 @@ const recurringForm = ref({
   category_id: '',
   account_id: '',
   cadence: 'monthly',
-  next_due: new Date().toISOString().slice(0, 10),
+  next_due: localDateKey(),
   is_subscription: true,
 })
 const holdingForm = ref({
@@ -152,25 +156,25 @@ const holdingForm = ref({
   asset_class: 'stock',
   units: '',
   unit_cost: '',
-  bought_on: new Date().toISOString().slice(0, 10),
+  bought_on: localDateKey(),
   account_id: '',
 })
 const lotForm = ref({
   holding_id: '',
   units: '',
   unit_cost: '',
-  bought_on: new Date().toISOString().slice(0, 10),
+  bought_on: localDateKey(),
   account_id: '',
 })
 const sellForm = ref({
   holding_id: '',
   units: '',
   unit_price: '',
-  sold_on: new Date().toISOString().slice(0, 10),
+  sold_on: localDateKey(),
   account_id: '',
 })
-const markForm = ref({ holding_id: '', unit_price: '', marked_on: new Date().toISOString().slice(0, 10) })
-const dividendForm = ref({ holding_id: '', amount: '', paid_on: new Date().toISOString().slice(0, 10), note: '' })
+const markForm = ref({ holding_id: '', unit_price: '', marked_on: localDateKey() })
+const dividendForm = ref({ holding_id: '', amount: '', paid_on: localDateKey(), note: '' })
 const goalForm = ref({ name: '', target_amount: '', current_amount: '0', due_on: '' })
 const liabilityForm = ref({ name: '', balance: '', apr: '', min_payment: '' })
 const paydownForm = ref({ id: '', amount: '' })
@@ -262,6 +266,8 @@ async function onSaveDailyLimit() {
 
 async function onDeleteDailyLimit(row) {
   if (isBusy.value || !row?.id) return
+  const confirmed = await confirmDelete('spend limit')
+  if (!confirmed) return
   isBusy.value = true
   const ok = await props.api.deleteDailyLimit(row.id)
   emit('toast', {
@@ -490,7 +496,7 @@ function openBuyMore(holdingId = '') {
     holding_id: holdingId || '',
     units: '',
     unit_cost: '',
-    bought_on: new Date().toISOString().slice(0, 10),
+    bought_on: localDateKey(),
     account_id: '',
   }
   openModal.value = 'lot'
@@ -501,7 +507,7 @@ function openSell(holdingId = '') {
     holding_id: holdingId || '',
     units: '',
     unit_price: '',
-    sold_on: new Date().toISOString().slice(0, 10),
+    sold_on: localDateKey(),
     account_id: '',
   }
   openModal.value = 'sell'
@@ -511,7 +517,7 @@ function openMarkPrice(holdingId = '') {
   markForm.value = {
     holding_id: holdingId || markForm.value.holding_id || '',
     unit_price: '',
-    marked_on: new Date().toISOString().slice(0, 10),
+    marked_on: localDateKey(),
   }
   openModal.value = 'mark'
 }
@@ -546,6 +552,8 @@ function nextMonth() {
 }
 
 async function onDeleteTransaction(row) {
+  const confirmed = await confirmDelete('transaction', row.note || undefined)
+  if (!confirmed) return
   const ok = await props.api.deleteTransaction(row.id)
   emit('toast', {
     type: ok ? 'success' : 'error',
@@ -602,6 +610,8 @@ function openEditAccount(account) {
 
 async function onArchiveAccount(account) {
   if (isBusy.value) return
+  const confirmed = await confirmArchive('account', account.name)
+  if (!confirmed) return
   isBusy.value = true
   const ok = await props.api.updateAccount(account.id, { is_archived: true })
   emit('toast', {
@@ -628,7 +638,7 @@ async function onCreateTransfer() {
       to_account_id: '',
       amount: '',
       note: '',
-      occurred_on: new Date().toISOString().slice(0, 10),
+      occurred_on: localDateKey(),
     }
     openModal.value = null
   }
@@ -655,7 +665,7 @@ async function onCreateRecurring() {
       category_id: '',
       account_id: '',
       cadence: 'monthly',
-      next_due: new Date().toISOString().slice(0, 10),
+      next_due: localDateKey(),
       is_subscription: subscriptionsOnly.value,
     }
     openModal.value = null
@@ -712,7 +722,7 @@ async function onCreateHolding() {
       asset_class: 'stock',
       units: '',
       unit_cost: '',
-      bought_on: new Date().toISOString().slice(0, 10),
+      bought_on: localDateKey(),
       account_id: '',
     }
     openModal.value = null
@@ -738,7 +748,7 @@ async function onAddLot() {
       holding_id: '',
       units: '',
       unit_cost: '',
-      bought_on: new Date().toISOString().slice(0, 10),
+      bought_on: localDateKey(),
       account_id: '',
     }
     openModal.value = null
@@ -765,7 +775,7 @@ async function onSellUnits() {
       holding_id: '',
       units: '',
       unit_price: '',
-      sold_on: new Date().toISOString().slice(0, 10),
+      sold_on: localDateKey(),
       account_id: '',
     }
     openModal.value = null
@@ -801,7 +811,7 @@ async function onAddDividend() {
     message: ok ? 'Dividend recorded' : props.api.errorMessage.value || 'Could not record dividend.',
   })
   if (ok) {
-    dividendForm.value = { holding_id: '', amount: '', paid_on: new Date().toISOString().slice(0, 10), note: '' }
+    dividendForm.value = { holding_id: '', amount: '', paid_on: localDateKey(), note: '' }
     openModal.value = null
   }
   isBusy.value = false
@@ -1054,6 +1064,7 @@ async function onCreateFromProposal(proposal) {
                 layout="stack"
                 center-label="Spent"
                 empty-label="No expenses this month."
+                :format-value="formatMoney"
               />
               <table v-if="spendDonutTableRows.length" class="sr-only">
                 <caption>Spend by category percentages</caption>
@@ -1082,6 +1093,7 @@ async function onCreateFromProposal(proposal) {
                 layout="stack"
                 center-label="Assets"
                 empty-label="No assets tracked yet."
+                :format-value="formatMoney"
               />
               <table v-if="allocationTableRows.length" class="sr-only">
                 <caption>Asset allocation percentages</caption>
@@ -2457,8 +2469,10 @@ async function onCreateFromProposal(proposal) {
               <DashboardDonutChart
                 :segments="allocationSegments"
                 size="lg"
+                layout="stack"
                 center-label="Assets"
                 empty-label="No assets tracked yet."
+                :format-value="formatMoney"
               />
               <table v-if="allocationTableRows.length" class="sr-only">
                 <caption>Investment allocation percentages</caption>

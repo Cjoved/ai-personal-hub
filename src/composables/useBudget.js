@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { localDateKey } from '../lib/localDate'
 
 const DEFAULT_BUDGET_CATEGORIES = [
   { name: 'Food', kind: 'expense', color: '#f97316', monthly_limit: 8000 },
@@ -290,7 +291,7 @@ export function useBudget(user) {
         amount,
         type: payload.type === 'income' ? 'income' : 'expense',
         note: payload.note?.trim() || null,
-        occurred_on: payload.occurred_on || new Date().toISOString().slice(0, 10),
+        occurred_on: payload.occurred_on || localDateKey(),
       })
       .select()
       .single()

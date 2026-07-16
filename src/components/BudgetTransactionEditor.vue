@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import FinanceSelect from './FinanceSelect.vue'
 import FinanceMoneyInput from './FinanceMoneyInput.vue'
 import FinanceDateInput from './FinanceDateInput.vue'
+import { localDateKey } from '../lib/localDate'
 
 const props = defineProps({
   isOpen: {
@@ -67,14 +68,14 @@ function resetForm() {
     categoryId.value = props.transaction.category_id || ''
     accountId.value = props.transaction.account_id || ''
     note.value = props.transaction.note || ''
-    occurredOn.value = props.transaction.occurred_on || new Date().toISOString().slice(0, 10)
+    occurredOn.value = props.transaction.occurred_on || localDateKey()
   } else {
     amount.value = ''
     type.value = 'expense'
     categoryId.value = ''
     accountId.value = props.accounts[0]?.id || ''
     note.value = ''
-    occurredOn.value = new Date().toISOString().slice(0, 10)
+    occurredOn.value = localDateKey()
   }
 }
 

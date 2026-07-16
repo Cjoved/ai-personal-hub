@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { ASSET_CLASS_COLORS } from '../lib/financeAssetClasses'
+import { ASSET_CLASS_COLORS, assetClassLabel } from '../lib/financeAssetClasses'
 import {
   formatInvestNumber,
   formatMoney,
@@ -51,7 +51,7 @@ function advanceDueDate(isoDate, cadence) {
   if (cadence === 'weekly') date.setDate(date.getDate() + 7)
   else if (cadence === 'yearly') date.setFullYear(date.getFullYear() + 1)
   else date.setMonth(date.getMonth() + 1)
-  return date.toISOString().slice(0, 10)
+  return localDateKey(date)
 }
 
 function csvEscape(value) {
@@ -430,7 +430,7 @@ export function useFinance(user) {
     for (const [assetClass, value] of Object.entries(byClass)) {
       if (value <= 0) continue
       segments.push({
-        label: assetClass.replace(/_/g, ' '),
+        label: assetClassLabel(assetClass),
         value: Math.round(value * 100) / 100,
         color: ASSET_CLASS_COLORS[assetClass] || ASSET_CLASS_COLORS.other,
       })
@@ -569,7 +569,7 @@ export function useFinance(user) {
         .gte('occurred_on', (() => {
           const d = new Date()
           d.setFullYear(d.getFullYear() - 2)
-          return d.toISOString().slice(0, 10)
+          return localDateKey(d)
         })()),
       supabase
         .from('finance_daily_limits')
@@ -817,7 +817,7 @@ export function useFinance(user) {
       amount,
       type: normalizeTransactionType(payload.type),
       note: payload.note?.trim() || null,
-      occurred_on: payload.occurred_on || new Date().toISOString().slice(0, 10),
+      occurred_on: payload.occurred_on || localDateKey(),
     }
     if (payload.account_id) insertRow.account_id = payload.account_id
 
@@ -853,7 +853,7 @@ export function useFinance(user) {
     }
 
     const pairId = crypto.randomUUID()
-    const occurredOn = payload.occurred_on || new Date().toISOString().slice(0, 10)
+    const occurredOn = payload.occurred_on || localDateKey()
     const note = payload.note?.trim() || 'Transfer'
 
     const rows = [
@@ -1058,7 +1058,7 @@ export function useFinance(user) {
         category_id: payload.category_id || null,
         account_id: payload.account_id || null,
         cadence: payload.cadence || 'monthly',
-        next_due: payload.next_due || new Date().toISOString().slice(0, 10),
+        next_due: payload.next_due || localDateKey(),
         is_active: payload.is_active !== false,
         is_subscription: Boolean(payload.is_subscription),
       })
@@ -1403,7 +1403,7 @@ export function useFinance(user) {
     }
 
     const unitCost = Number(payload.unit_cost) || 0
-    const boughtOn = payload.bought_on || new Date().toISOString().slice(0, 10)
+    const boughtOn = payload.bought_on || localDateKey()
 
     const { data, error } = await supabase
       .from('finance_lots')
@@ -1460,7 +1460,7 @@ export function useFinance(user) {
 
     const unitsToSell = Number(payload.units)
     const unitPrice = Number(payload.unit_price)
-    const soldOn = payload.sold_on || new Date().toISOString().slice(0, 10)
+    const soldOn = payload.sold_on || localDateKey()
 
     if (!(unitsToSell > 0)) {
       errorMessage.value = 'Units must be greater than zero.'
@@ -1568,7 +1568,7 @@ export function useFinance(user) {
     if (!userId.value || !holdingId) return false
     errorMessage.value = ''
 
-    const markedOn = payload.marked_on || new Date().toISOString().slice(0, 10)
+    const markedOn = payload.marked_on || localDateKey()
     const unitPrice = Number(payload.unit_price)
     if (!(unitPrice >= 0)) {
       errorMessage.value = 'Price must be zero or greater.'
@@ -1616,7 +1616,7 @@ export function useFinance(user) {
       .insert({
         user_id: userId.value,
         holding_id: holdingId,
-        paid_on: payload.paid_on || new Date().toISOString().slice(0, 10),
+        paid_on: payload.paid_on || localDateKey(),
         amount,
         note: payload.note?.trim() || null,
       })

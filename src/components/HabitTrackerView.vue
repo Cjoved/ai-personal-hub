@@ -13,6 +13,7 @@ import {
 import { useHabitDurationTimer } from '../composables/useHabitDurationTimer'
 import { useHabitNotifications } from '../composables/useHabitNotifications'
 import { supabase } from '../lib/supabase'
+import { useConfirm } from '../composables/useConfirm'
 
 const props = defineProps({
   api: {
@@ -33,6 +34,8 @@ const emit = defineEmits([
   'create-from-suggestion',
   'go-section',
 ])
+
+const { confirmArchive } = useConfirm()
 
 const showToday = computed(() => props.section === 'today' || props.section === 'habits')
 const showInsights = computed(() => props.section === 'insights' || props.section === 'stats')
@@ -401,6 +404,8 @@ async function submitLogPanel() {
 }
 
 async function onArchive(habit) {
+  const confirmed = await confirmArchive('habit', habit.title)
+  if (!confirmed) return
   const ok = await props.api.archiveHabit(habit.id)
   emit('toast', {
     type: ok ? 'success' : 'error',
@@ -467,6 +472,7 @@ watch(
             <p class="habits-hero-sub mt-2 text-sm text-slate-600 dark:text-slate-300">
               {{ dueTodayCount ? `${checkedDueCount} of ${dueTodayCount} habits checked in` : 'No habits scheduled today — add one to start a streak.' }}
             </p>
+            <p class="mt-1 text-xs text-slate-500">New day unlocks at 4:00 AM · before then you’re still on yesterday.</p>
             <div class="habits-hero-today-chips mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
               <span class="habits-chip habits-chip--tiny">Lv {{ progress?.level || 1 }} · {{ progress?.xp || 0 }} XP</span>
               <span class="habits-chip habits-chip--tiny">{{ progress?.freeze_tokens ?? 0 }} freezes</span>
@@ -950,7 +956,7 @@ watch(
             <article class="habits-panel rounded-2xl p-4">
               <div class="mb-1">
                 <h3 class="font-extrabold text-slate-950 dark:text-slate-50">Mood vs weekday</h3>
-                <p class="text-xs text-slate-500">Average mood from check-in journals</p>
+                <p class="text-xs text-slate-500">Average mood from daily journals and check-ins</p>
               </div>
               <LiveTrendChart
                 type="bar"

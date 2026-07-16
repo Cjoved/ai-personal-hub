@@ -45,6 +45,16 @@ export function useConfirm() {
         cancelLabel: 'Cancel',
         tone: 'danger',
       }),
+    confirmArchive: (itemLabel, itemName = '') =>
+      confirm({
+        title: `Archive ${itemLabel}?`,
+        message: itemName
+          ? `Archive "${itemName}"? You can restore it later from archived items.`
+          : `Archive this ${itemLabel.toLowerCase()}? You can restore it later from archived items.`,
+        confirmLabel: 'Archive',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      }),
     answer,
   }
 }

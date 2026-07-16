@@ -142,7 +142,7 @@ const {
 
 const { settings, onboardingComplete, update: updateSettings, completeOnboarding } = useSettings(user)
 const toast = useToast()
-const { confirmDelete } = useConfirm()
+const { confirmDelete, confirmArchive } = useConfirm()
 
 const editingTask = ref(null)
 const creatingTask = ref(false)
@@ -379,6 +379,10 @@ async function handleUpdateTask(taskId, patch) {
 }
 
 async function handleArchiveTask(taskId) {
+  const task = filteredTasks.value.find((item) => item.id === taskId)
+  const confirmed = await confirmArchive('task', task?.title)
+  if (!confirmed) return
+
   const didArchive = await archiveTask(taskId)
   if (didArchive) toast.success('Task archived')
   else if (taskErrorMessage.value) toast.error(taskErrorMessage.value)
@@ -546,6 +550,9 @@ async function handleUpdateHabitCategory(id, payload) {
 }
 
 async function handleDeleteHabitCategory(id) {
+  const category = habitCategories.value?.find?.((item) => item.id === id)
+  const confirmed = await confirmDelete('category', category?.name)
+  if (!confirmed) return
   const ok = await deleteHabitCategory(id)
   if (ok) toast.success('Category deleted')
   else if (habitsErrorMessage.value) toast.error(habitsErrorMessage.value)
@@ -568,6 +575,9 @@ async function handleUpdateBudgetCategory(id, payload) {
 }
 
 async function handleDeleteBudgetCategory(id) {
+  const category = budgetCategories.value?.find?.((item) => item.id === id)
+  const confirmed = await confirmDelete('category', category?.name)
+  if (!confirmed) return
   const ok = await deleteBudgetCategory(id)
   if (ok) toast.success('Category deleted')
   else if (budgetErrorMessage.value) toast.error(budgetErrorMessage.value)
